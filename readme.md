@@ -1,1 +1,1 @@
-Storage<T> experimental in-memory storage
+Storage\<T\> experimental in-memory storage
