@@ -87,7 +87,7 @@ pub trait StorageObject: Serialize + Sized {
     }
 }
 
-/// # Storage<T> experimental FS in-memory storage
+/// # Storage\<T\> experimental FS in-memory storage
 pub struct Storage<T> {
     path: &'static str,
     pub data: Vec<T>,
