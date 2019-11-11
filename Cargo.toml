@@ -4,7 +4,7 @@ description = "# Storage<T> file based in-memory database.\nStrongly MVP, big AP
 version = "0.0.1"
 authors = ["Peter Mezei <mezeipetister@gmail.com>"]
 edition = "2018"
-license = "GPLv2"
+license = "GPL-2.0"
 homepage = "https://github.com/mezeipetister/storaget"
 repository = "https://github.com/mezeipetister/storaget"
 
