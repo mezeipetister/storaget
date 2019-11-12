@@ -355,9 +355,9 @@ mod tests {
             ));
         }
 
-        let obj1 = Example::new("102", "", "102");
-        let obj2 = Example::new("102", "", "103");
-        let obj3 = Example::new("102", "", "104");
+        let obj1 = Example::new("102as", "", "102");
+        let obj2 = Example::new("103sd", "", "103");
+        let obj3 = Example::new("104df", "", "104");
 
         storage_id_available(&storage, obj1.get_id()).unwrap();
         storage_id_available(&storage, obj2.get_id()).unwrap();
