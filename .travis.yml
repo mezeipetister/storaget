@@ -19,15 +19,12 @@ addons:
       - cmake
     sources:
       - kalakris-cmake
-  
-# For Coveralls.io
-before_script:
-  - cargo install --force cargo-travis
-  - export PATH=$HOME/.cargo/bin:$PATH
-  - rustup component add rustfmt-preview
 
 script:
   - make test
 
 after_success:
+  - cargo install --force cargo-travis
+  - export PATH=$HOME/.cargo/bin:$PATH
+  - rustup component add rustfmt-preview
   - cargo coveralls
