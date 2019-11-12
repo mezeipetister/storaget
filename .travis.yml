@@ -6,25 +6,18 @@ language: rust
 rust:
   - nightly
 
-cache: cargo
-
-# Packages for Coveralls.io
 addons:
   apt:
     packages:
-      - libcurl4-openssl-dev
-      - libelf-dev
-      - libdw-dev
-      - binutils-dev
-      - cmake
-    sources:
-      - kalakris-cmake
+      - libssl-dev
+
+cache: cargo
+
+before_cache: |
+  cargo install cargo-tarpaulin -f
 
 script:
   - make test
 
 after_success:
-  - cargo install --force cargo-travis
-  - export PATH=$HOME/.cargo/bin:$PATH
-  - rustup component add rustfmt-preview
-  - cargo coveralls
+  - cargo tarpaulin --ciserver travis-ci --coveralls $TRAVIS_JOB_ID
