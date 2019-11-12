@@ -354,9 +354,18 @@ mod tests {
                 &format!("{}", item),
             ));
         }
-        add_to_storage(&mut storage, Example::new("102", "", "102")).unwrap();
-        add_to_storage(&mut storage, Example::new("103", "", "103")).unwrap();
-        add_to_storage(&mut storage, Example::new("104", "", "104")).unwrap();
+
+        let obj1 = Example::new("102", "", "102");
+        let obj2 = Example::new("102", "", "103");
+        let obj3 = Example::new("102", "", "104");
+
+        storage_id_available(&storage, obj1.get_id()).unwrap();
+        storage_id_available(&storage, obj2.get_id()).unwrap();
+        storage_id_available(&storage, obj3.get_id()).unwrap();
+
+        add_to_storage(&mut storage, obj1).unwrap();
+        add_to_storage(&mut storage, obj2).unwrap();
+        add_to_storage(&mut storage, obj3).unwrap();
 
         let mut item =
             add_to_storage_and_return_ref(&mut storage, Example::new("105", TESTDIR_PATH, "105"))
