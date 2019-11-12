@@ -59,14 +59,19 @@ where
     }
 }
 
+pub fn demo_func() -> u32 {
+    7
+}
+
 #[test]
 fn simple_test() {
-    struct User {
-        id: String,
-        name: String,
-    }
-    impl StorageObject for u32 {}
-    impl StorageObject for User {}
-    let users: Storage<Vec<User>> = Storage::load_from("data").unwrap();
-    let user: Storage<User> = Storage::load_from("data").unwrap();
+    // struct User {
+    //     id: String,
+    //     name: String,
+    // }
+    // impl StorageObject for u32 {}
+    // impl StorageObject for User {}
+    // let users: Storage<Vec<User>> = Storage::load_from("data").unwrap();
+    // let user: Storage<User> = Storage::load_from("data").unwrap();
+    assert_eq!(demo_func(), 7);
 }
