@@ -33,7 +33,7 @@ pub struct Storage<T> {
     path: &'static str,
 }
 
-impl<'a, T: 'a> Storage<Vec<T>>
+impl<'a, 'b: 'a, T: 'a> Storage<Vec<T>>
 where
     T: StorageObject<'a> + StorageHasID,
 {
@@ -43,16 +43,16 @@ where
             path,
         }
     }
-    pub fn get_by_id(&'a mut self, id: &str) -> Option<DataObject<T>> {
+    pub fn get_by_id(&'b mut self, id: &str) -> StorageResult<DataObject<T>> {
         for item in &mut self.data {
             if item.get_id() == id {
-                return Some(DataObject {
+                return Ok(DataObject {
                     data: item,
                     path: self.path,
                 });
             }
         }
-        None
+        Err(Error::InternalError(format!("ID: {} not found", id)))
     }
     pub fn add_to_storage(&'a mut self, new_object: T) -> StorageResult<()> {
         self.data.push(new_object);
@@ -61,16 +61,16 @@ where
 }
 
 #[derive(Debug)]
-pub struct DataObject<'a, T> {
+pub struct DataObject<'a, T: 'a> {
     data: &'a mut T,
     path: &'static str,
 }
 
 impl<'a, T> DataObject<'a, T> {
-    pub fn get(&self) -> &T {
+    pub fn get(self) -> &'a T {
         self.data
     }
-    pub fn get_mut(&'a mut self) -> &'a mut T {
+    pub fn get_mut(self) -> &'a mut T {
         self.data
     }
     pub fn update<F: 'a, R>(&'a mut self, mut f: F) -> R
@@ -129,13 +129,16 @@ fn basic_test() {
     });
     assert_eq!(res, true);
     assert_eq!(storage.get_by_id("3").unwrap().get().name, "Gabi!!!!");
-    assert_eq!(storage.get_by_id("4").is_none(), true);
+    assert_eq!(storage.get_by_id("4").is_err(), true);
 
-    if let Some(u1) = &storage.get_by_id("1") {
+    let u1 = storage.get_by_id("1").unwrap().get();
+    assert_eq!(u1.name, "Kriszti");
+
+    if let Ok(u1) = storage.get_by_id("1") {
         assert_eq!(u1.get().name, "Kriszti");
     }
 
-    if let Some(mut u2) = storage.get_by_id("1") {
+    if let Ok(mut u2) = storage.get_by_id("1") {
         u2.get_mut().set_name("Kriszti!");
     }
     assert_eq!(storage.get_by_id("1").unwrap().get().name, "Kriszti!");
