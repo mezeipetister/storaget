@@ -67,7 +67,7 @@ pub struct DataObject<'a, T> {
 }
 
 impl<'a, T> DataObject<'a, T> {
-    pub fn get(&'a self) -> &'a T {
+    pub fn get(&self) -> &T {
         self.data
     }
     pub fn get_mut(&'a mut self) -> &'a mut T {
@@ -130,6 +130,15 @@ fn basic_test() {
     assert_eq!(res, true);
     assert_eq!(storage.get_by_id("3").unwrap().get().name, "Gabi!!!!");
     assert_eq!(storage.get_by_id("4").is_none(), true);
+
+    if let Some(u1) = &storage.get_by_id("1") {
+        assert_eq!(u1.get().name, "Kriszti");
+    }
+
+    if let Some(mut u2) = storage.get_by_id("1") {
+        u2.get_mut().set_name("Kriszti!");
+    }
+    assert_eq!(storage.get_by_id("1").unwrap().get().name, "Kriszti!");
 }
 
 // pub struct Storage<T> {
