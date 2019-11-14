@@ -61,15 +61,7 @@ where
     }
 }
 
-// impl<'a, T> Storage<T>
-// where
-//     T: StorageObject<'a>,
-// {
-//     fn say_hi(&self) {
-//         println!("Hi!");
-//     }
-// }
-
+#[must_use]
 #[derive(Debug)]
 pub struct DataObject<'a, T: 'a> {
     data: &'a mut T,
