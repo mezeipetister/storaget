@@ -6,15 +6,10 @@ language: rust
 rust:
   - nightly
 
-addons:
-  apt:
-    packages:
-      - libssl-dev
+before_install:
+  - curl -L https://github.com/mozilla/grcov/releases/latest/download/grcov-linux-x86_64.tar.bz2 | tar jxf -
 
 cache: cargo
-
-before_cache: |
-  cargo install cargo-tarpaulin -f
 
 script:
   - make test
