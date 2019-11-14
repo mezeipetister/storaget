@@ -61,14 +61,14 @@ where
     }
 }
 
-impl<'a, T> Storage<T>
-where
-    T: StorageObject<'a>,
-{
-    fn say_hi(&self) {
-        println!("Hi!");
-    }
-}
+// impl<'a, T> Storage<T>
+// where
+//     T: StorageObject<'a>,
+// {
+//     fn say_hi(&self) {
+//         println!("Hi!");
+//     }
+// }
 
 #[derive(Debug)]
 pub struct DataObject<'a, T: 'a> {
@@ -94,6 +94,16 @@ impl<'a, T> DataObject<'a, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn test_storage_id() {
+        impl StorageHasID for i32 {
+            fn get_id(&self) -> &str {
+                let res: &'static str = "a";
+                res
+            }
+        }
+        assert_eq!(3.get_id(), "a");
+    }
     #[test]
     fn basic_test() {
         struct User {

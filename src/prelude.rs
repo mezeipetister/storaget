@@ -54,4 +54,9 @@ mod tests {
         let err = Error::InternalError("test error".into());
         assert_eq!(format!("{:?}", err), "Internal error: test error");
     }
+    #[test]
+    fn test_error() {
+        let e = Error::InternalError("test".into());
+        assert_eq!(format!("{:?}", e), "Internal error: test");
+    }
 }
