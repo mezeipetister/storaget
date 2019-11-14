@@ -73,5 +73,9 @@ mod tests {
     fn test_error() {
         let e = Error::InternalError("test".into());
         assert_eq!(format!("{:?}", e), "Internal error: test");
+        let f = Error::ObjectNotFound,
+        assert_eq!(format!("{}",f), "Storage object not found in storage.");
+        let g = Error::PathNotFound,
+        assert_eq!(format!("{}",g), "Path not found";
     }
 }
