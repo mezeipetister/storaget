@@ -33,7 +33,7 @@ pub struct Storage<T> {
     path: &'static str,
 }
 
-impl<'a, 'b: 'a, T: 'a> Storage<Vec<T>>
+impl<'a, T: 'a> Storage<Vec<T>>
 where
     T: StorageObject<'a> + StorageHasID,
 {
@@ -43,7 +43,7 @@ where
             path,
         }
     }
-    pub fn get_by_id(&'b mut self, id: &str) -> StorageResult<DataObject<T>> {
+    pub fn get_by_id(&'a mut self, id: &str) -> StorageResult<DataObject<T>> {
         for item in &mut self.data {
             if item.get_id() == id {
                 return Ok(DataObject {
@@ -54,9 +54,19 @@ where
         }
         Err(Error::InternalError(format!("ID: {} not found", id)))
     }
+    // TODO: implement ID is unique check!
     pub fn add_to_storage(&'a mut self, new_object: T) -> StorageResult<()> {
         self.data.push(new_object);
         Ok(())
+    }
+}
+
+impl<'a, T> Storage<T>
+where
+    T: StorageObject<'a>,
+{
+    fn say_hi(&self) {
+        println!("Hi!");
     }
 }
 
@@ -81,67 +91,104 @@ impl<'a, T> DataObject<'a, T> {
     }
 }
 
-#[test]
-fn basic_test() {
-    struct User {
-        id: String,
-        name: String,
-    }
-    impl User {
-        fn new(id: &str, name: &str) -> Self {
-            User {
-                id: id.into(),
-                name: name.into(),
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn basic_test() {
+        struct User {
+            id: String,
+            name: String,
+        }
+        impl User {
+            fn new(id: &str, name: &str) -> Self {
+                User {
+                    id: id.into(),
+                    name: name.into(),
+                }
+            }
+            fn set_name(&mut self, name: &str) {
+                self.name = name.into();
             }
         }
-        fn set_name(&mut self, name: &str) {
-            self.name = name.into();
+        impl<'a> StorageObject<'a> for User {
+            fn load(&'a mut self, data: &str) -> StorageResult<()> {
+                Ok(())
+            }
         }
-    }
-    impl<'a> StorageObject<'a> for User {
-        fn load(&'a mut self, data: &str) -> StorageResult<()> {
-            Ok(())
+        impl StorageHasID for User {
+            fn get_id(&self) -> &str {
+                &self.id
+            }
         }
-    }
-    impl StorageHasID for User {
-        fn get_id(&self) -> &str {
-            &self.id
+        let mut storage: Storage<Vec<User>> = Storage::new("data");
+        storage.add_to_storage(User::new("1", "Kriszti")).unwrap();
+        storage.add_to_storage(User::new("2", "Peti")).unwrap();
+        storage.add_to_storage(User::new("3", "Gabi")).unwrap();
+
+        // let mut a = vec![1,2,3,4,5];
+        // a.iter_mut();
+
+        assert_eq!(storage.get_by_id("1").unwrap().get().name, "Kriszti");
+        assert_eq!(storage.get_by_id("2").unwrap().get().name, "Peti");
+        assert_eq!(storage.get_by_id("3").unwrap().get().name, "Gabi");
+        storage
+            .get_by_id("3")
+            .unwrap()
+            .update(|u| u.set_name("Gabi!"));
+        let res = storage.get_by_id("3").unwrap().update(|u| -> bool {
+            u.set_name("Gabi!!!!");
+            true
+        });
+        assert_eq!(res, true);
+        // Demo result type alias
+        pub type DemoResult<T> = Result<T, ErrorI>;
+
+        pub enum ErrorI {
+            Error,
         }
+
+        // Well formatted display text for users
+        // TODO: Use error code and language translation for end-user error messages.
+        impl std::fmt::Display for ErrorI {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                match self {
+                    ErrorI::Error => write!(f, "Internal error"),
+                }
+            }
+        }
+
+        impl std::fmt::Debug for ErrorI {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    ErrorI::Error => write!(f, "Internal error!"),
+                }
+            }
+        }
+
+        let res = storage
+            .get_by_id("3")
+            .unwrap()
+            .update(|u| -> DemoResult<()> {
+                u.set_name("Gabi!!!!");
+                Ok(())
+            });
+        assert_eq!(res.is_ok(), true);
+        assert_eq!(storage.get_by_id("3").unwrap().get().name, "Gabi!!!!");
+        assert_eq!(storage.get_by_id("4").is_err(), true);
+
+        let u1 = storage.get_by_id("1").unwrap().get();
+        assert_eq!(u1.name, "Kriszti");
+
+        if let Ok(u1) = storage.get_by_id("1") {
+            assert_eq!(u1.get().name, "Kriszti");
+        }
+
+        if let Ok(mut u2) = storage.get_by_id("1") {
+            u2.get_mut().set_name("Kriszti!");
+        }
+        assert_eq!(storage.get_by_id("1").unwrap().get().name, "Kriszti!");
     }
-    let mut storage: Storage<Vec<User>> = Storage::new("data");
-    storage.add_to_storage(User::new("1", "Kriszti")).unwrap();
-    storage.add_to_storage(User::new("2", "Peti")).unwrap();
-    storage.add_to_storage(User::new("3", "Gabi")).unwrap();
-
-    // let mut a = vec![1,2,3,4,5];
-    // a.iter_mut();
-
-    assert_eq!(storage.get_by_id("1").unwrap().get().name, "Kriszti");
-    assert_eq!(storage.get_by_id("2").unwrap().get().name, "Peti");
-    assert_eq!(storage.get_by_id("3").unwrap().get().name, "Gabi");
-    storage
-        .get_by_id("3")
-        .unwrap()
-        .update(|u| u.set_name("Gabi!"));
-    let res = storage.get_by_id("3").unwrap().update(|u| -> bool {
-        u.set_name("Gabi!!!!");
-        true
-    });
-    assert_eq!(res, true);
-    assert_eq!(storage.get_by_id("3").unwrap().get().name, "Gabi!!!!");
-    assert_eq!(storage.get_by_id("4").is_err(), true);
-
-    let u1 = storage.get_by_id("1").unwrap().get();
-    assert_eq!(u1.name, "Kriszti");
-
-    if let Ok(u1) = storage.get_by_id("1") {
-        assert_eq!(u1.get().name, "Kriszti");
-    }
-
-    if let Ok(mut u2) = storage.get_by_id("1") {
-        u2.get_mut().set_name("Kriszti!");
-    }
-    assert_eq!(storage.get_by_id("1").unwrap().get().name, "Kriszti!");
 }
 
 // pub struct Storage<T> {
