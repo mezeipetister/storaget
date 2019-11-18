@@ -166,6 +166,12 @@ mod tests {
         // a.iter_mut();
 
         assert_eq!(storage.get_by_id("1").unwrap().get().name, "Kriszti");
+        if let Ok(user) = storage.get_by_id("1") {
+            assert_eq!(user.get().name, "Kriszti");
+        }
+        let u1 = storage.get_by_id("1").unwrap();
+        assert_eq!(u1.get().name, "Kriszti");
+
         assert_eq!(storage.get_by_id("2").unwrap().get().name, "Peti");
         assert_eq!(storage.get_by_id("3").unwrap().get().name, "Gabi");
 
