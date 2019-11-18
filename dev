@@ -1,0 +1,9 @@
+struct Storaget<T> {
+    data: Vec<T>,
+    path: &'static str,
+}
+
+struct Filter<T> {
+    data: &Vec<T>,
+    path: &'static str,
+}
