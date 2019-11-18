@@ -17,6 +17,7 @@
 
 mod prelude;
 pub use prelude::*;
+use std::mem;
 
 // Need this?
 pub trait StorageHasID {
@@ -58,6 +59,39 @@ where
     pub fn add_to_storage(&'a mut self, new_object: T) -> StorageResult<()> {
         self.data.push(new_object);
         Ok(())
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut Storage<Vec<T>> {
+    type Item = DataObject<'a, T>;
+    type IntoIter = DataIter<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        DataIter {
+            data: &mut self.data,
+            path: self.path,
+        }
+    }
+}
+
+pub struct DataIter<'a, T> {
+    data: &'a mut [T],
+    path: &'static str,
+}
+
+impl<'a, T> Iterator for DataIter<'a, T> {
+    type Item = DataObject<'a, T>;
+    fn next(&mut self) -> Option<DataObject<'a, T>> {
+        let slice = mem::replace(&mut self.data, &mut []);
+        match slice.split_first_mut() {
+            Some((head, tail)) => {
+                self.data = tail;
+                Some(DataObject {
+                    data: head,
+                    path: self.path,
+                })
+            }
+            None => None,
+        }
     }
 }
 
@@ -134,6 +168,7 @@ mod tests {
         assert_eq!(storage.get_by_id("1").unwrap().get().name, "Kriszti");
         assert_eq!(storage.get_by_id("2").unwrap().get().name, "Peti");
         assert_eq!(storage.get_by_id("3").unwrap().get().name, "Gabi");
+
         storage
             .get_by_id("3")
             .unwrap()
@@ -190,6 +225,14 @@ mod tests {
             u2.get_mut().set_name("Kriszti!");
         }
         assert_eq!(storage.get_by_id("1").unwrap().get().name, "Kriszti!");
+
+        for mut user in &mut storage {
+            user.update(|u| u.set_name("Bruhaha"));
+        }
+
+        assert_eq!(storage.get_by_id("1").unwrap().get().name, "Bruhaha");
+        assert_eq!(storage.get_by_id("2").unwrap().get().name, "Bruhaha");
+        assert_eq!(storage.get_by_id("3").unwrap().get().name, "Bruhaha");
     }
 }
 
