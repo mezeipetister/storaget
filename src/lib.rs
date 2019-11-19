@@ -19,8 +19,7 @@
 
 mod prelude;
 pub use prelude::*;
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 // Need this?
 pub trait StorageHasID {
@@ -33,7 +32,7 @@ pub trait StorageObject<'a> {
 }
 
 pub struct Storage<T> {
-    data: Vec<(String, Rc<RefCell<T>>)>,
+    data: Vec<(String, Arc<Mutex<T>>)>,
     path: &'static str,
 }
 
@@ -72,7 +71,7 @@ where
     pub fn add_to_storage(&mut self, new_object: T) -> StorageResult<()> {
         self.data.push((
             new_object.get_id().to_owned(),
-            Rc::new(RefCell::from(new_object)),
+            Arc::new(Mutex::from(new_object)),
         ));
         Ok(())
     }
@@ -81,7 +80,7 @@ where
 #[must_use]
 #[derive(Debug)]
 pub struct DataObject<T> {
-    data: Rc<RefCell<T>>,
+    data: Arc<Mutex<T>>,
     path: &'static str,
 }
 
@@ -90,14 +89,14 @@ impl<T> DataObject<T> {
     where
         F: Fn(&T) -> R,
     {
-        f(&self.data.borrow_mut())
+        f(&self.data.lock().unwrap())
     }
     pub fn update<F, R>(&self, mut f: F) -> R
     where
         F: FnMut(&mut T) -> R,
     {
         println!("Saved!");
-        f(&mut self.data.borrow_mut())
+        f(&mut self.data.lock().unwrap())
     }
 }
 
@@ -222,7 +221,7 @@ mod tests {
     }
     #[bench]
     fn bench_storage_filter(b: &mut Bencher) {
-        let mut storage = build_user_storage_of_dummies(100000);
+        let mut storage = build_user_storage_of_dummies(1000);
         let mut u1 = User::new("demo_id_iter1", "Lorem Ipsum", 9);
         u1.description = "Lorem Ipsum".to_owned();
         let mut u2 = User::new("demo_id_iter2", "Lorem Demo Item", 9);
