@@ -45,7 +45,7 @@ where
             path,
         }
     }
-    pub fn add(&self, object: T) -> Result<(), String> {
+    pub fn add(&self, object: T) -> StorageResult<()> {
         let mut data = self.data.lock().unwrap();
         self.lookup_table
             .lock()
@@ -54,14 +54,21 @@ where
         data.push(Arc::new(Mutex::new(object)));
         Ok(())
     }
-    pub fn get_by_id(&self, id: &str) -> Result<DataObject<T>, String> {
+    pub fn get_by_id(&self, id: &str) -> StorageResult<DataObject<T>> {
         match self.lookup_table.lock().unwrap().get_key_value(id) {
             Some(r) => Ok(DataObject::new(
                 self.data.lock().unwrap().get(*r.1).unwrap().clone(),
                 self.path,
             )),
-            None => Err("Not found".into()),
+            None => Err(Error::ObjectNotFound),
         }
+    }
+    pub fn get_by_ids(&self, ids: &[&str]) -> Vec<(String, StorageResult<DataObject<T>>)> {
+        let mut result: Vec<(String, StorageResult<DataObject<T>>)> = Vec::new();
+        for id in ids {
+            result.push(((*id).into(), self.get_by_id(id)));
+        }
+        result
     }
     pub fn data(&self) -> Vec<Arc<Mutex<T>>> {
         (&*self.data.lock().unwrap())
@@ -393,34 +400,39 @@ mod tests {
                 .unwrap();
         });
     }
-    #[bench]
-    fn bench_vec_sort_i32(b: &mut Bencher) {
-        let mut vector = (0..100000)
-            .map(|x| rand::thread_rng().gen_range(0, 10000000))
-            .collect::<Vec<i32>>();
-        b.iter(|| {
-            vector.sort();
-            println!("{}", vector.len());
-        });
+    #[test]
+    fn test_storage_get_by_id() {
+        let storage = Storage::new("data");
+        for _ in 0..1000 {
+            let u = User::new(
+                &build_string(50),
+                &build_string(100),
+                rand::thread_rng().gen_range(10, 90),
+            );
+            storage.add(u).unwrap();
+        }
+        let u3 = User::new("mezeipetister", "Peti", 31);
+        storage.add(u3).unwrap();
+        assert_eq!(storage.get_by_id("mezeipetister").is_ok(), true);
     }
-    #[bench]
-    fn bench_vec_sort_string(b: &mut Bencher) {
-        let mut vector = (0..100000)
-            .map(|x| build_string(20))
-            .collect::<Vec<String>>();
-        b.iter(|| {
-            vector.sort();
-            println!("{}", vector.len());
-        });
-    }
-    #[bench]
-    fn bench_vec_sort_string_short(b: &mut Bencher) {
-        let mut vector = (0..100000)
-            .map(|x| build_string(5))
-            .collect::<Vec<String>>();
-        b.iter(|| {
-            vector.sort();
-            println!("{}", vector.len());
-        });
+    #[test]
+    fn test_storage_get_by_ids() {
+        let storage = Storage::new("data");
+        for _ in 0..1000 {
+            let u = User::new(
+                &build_string(50),
+                &build_string(100),
+                rand::thread_rng().gen_range(10, 90),
+            );
+            storage.add(u).unwrap();
+        }
+        storage.add(User::new("demo1", "Demo 1", 9)).unwrap();
+        storage.add(User::new("demo2", "Demo 2", 9)).unwrap();
+        storage.add(User::new("demo3", "Demo 3", 9)).unwrap();
+        assert_eq!(storage.get_by_ids(&["demo1", "demo2", "demo3"]).len(), 3);
+        let result = storage.get_by_ids(&["demo1", "demo2", "demo3"]);
+        for item in &result {
+            assert_eq!(item.1.is_ok(), true);
+        }
     }
 }
