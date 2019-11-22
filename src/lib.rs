@@ -17,74 +17,115 @@
 
 #![feature(test)]
 
-mod prelude;
+extern crate rand;
+extern crate test;
+pub mod prelude;
 pub use prelude::*;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-// Need this?
-pub trait StorageHasID {
-    fn get_id(&self) -> &str;
-}
-
-// Really?
 pub trait StorageObject<'a> {
-    fn load(&'a mut self, data: &str) -> StorageResult<()>;
+    fn load(&mut self, data: &str) -> StorageResult<()>;
 }
 
 pub struct Storage<T> {
-    data: Vec<(String, Arc<Mutex<T>>)>,
+    data: Mutex<Vec<Arc<Mutex<T>>>>,
+    lookup_table: Mutex<BTreeMap<String, usize>>,
     path: &'static str,
 }
 
-impl<'a, T: 'a> Storage<T>
+impl<T> Storage<T>
 where
-    T: StorageObject<'a> + StorageHasID,
+    T: HasId,
 {
     pub fn new(path: &'static str) -> Self {
         Storage {
-            data: Vec::new(),
+            data: Mutex::new(Vec::new()),
+            lookup_table: Mutex::new(BTreeMap::new()),
             path,
         }
     }
-    pub fn get_by_id(&'a mut self, id: &str) -> StorageResult<DataObject<T>> {
-        for (index, data) in &self.data {
-            if index == id {
-                return Ok(DataObject {
-                    data: data.clone(),
-                    path: self.path,
-                });
-            }
-        }
-        Err(Error::InternalError(format!("ID: {} not found", id)))
-    }
-    pub fn get(&'a self) -> Vec<DataObject<T>> {
-        let mut res = Vec::new();
-        for item in &self.data {
-            res.push(DataObject {
-                data: item.1.clone(),
-                path: self.path,
-            });
-        }
-        res
-    }
-    // TODO: implement ID is unique check!
-    pub fn add_to_storage(&mut self, new_object: T) -> StorageResult<()> {
-        self.data.push((
-            new_object.get_id().to_owned(),
-            Arc::new(Mutex::from(new_object)),
-        ));
+    pub fn add(&self, object: T) -> Result<(), String> {
+        let mut data = self.data.lock().unwrap();
+        self.lookup_table
+            .lock()
+            .unwrap()
+            .insert(object.get_id().to_owned(), data.len());
+        data.push(Arc::new(Mutex::new(object)));
         Ok(())
+    }
+    pub fn get_by_id(&self, id: &str) -> Result<DataObject<T>, String> {
+        match self.lookup_table.lock().unwrap().get_key_value(id) {
+            Some(r) => Ok(DataObject::new(
+                self.data.lock().unwrap().get(*r.1).unwrap().clone(),
+                self.path,
+            )),
+            None => Err("Not found".into()),
+        }
+    }
+    pub fn data(&self) -> Vec<Arc<Mutex<T>>> {
+        (&*self.data.lock().unwrap())
+            .into_iter()
+            .map(|v| v.clone())
+            .collect::<Vec<Arc<Mutex<T>>>>()
     }
 }
 
-#[must_use]
-#[derive(Debug)]
-pub struct DataObject<T> {
+impl<T> IntoIterator for &Storage<T>
+where
+    T: HasId + Clone,
+{
+    type Item = DataObject<T>;
+    type IntoIter = DataIter<T>;
+    fn into_iter(self) -> Self::IntoIter {
+        DataIter {
+            data: self.data(),
+            path: self.path,
+            index: 0,
+        }
+    }
+}
+
+pub struct DataIter<T>
+where
+    T: HasId,
+{
+    data: Vec<Arc<Mutex<T>>>,
+    path: &'static str,
+    index: usize,
+}
+
+impl<T> Iterator for DataIter<T>
+where
+    T: HasId,
+{
+    type Item = DataObject<T>;
+    fn next(&mut self) -> Option<DataObject<T>> {
+        match &self.data.get(self.index) {
+            Some(item) => {
+                self.index += 1;
+                return Some(DataObject::new((*item).clone(), self.path));
+            }
+            None => return None,
+        }
+    }
+}
+
+pub struct DataObject<T>
+where
+    T: HasId,
+{
     data: Arc<Mutex<T>>,
     path: &'static str,
 }
 
-impl<T> DataObject<T> {
+impl<T> DataObject<T>
+where
+    T: HasId,
+{
+    fn new(data: Arc<Mutex<T>>, path: &'static str) -> Self {
+        DataObject { data, path }
+    }
     pub fn get<F, R>(&self, f: F) -> R
     where
         F: Fn(&T) -> R,
@@ -100,57 +141,43 @@ impl<T> DataObject<T> {
     }
 }
 
+pub trait HasId {
+    fn get_id(&self) -> &str;
+}
+
+#[derive(Clone)]
+pub struct User {
+    id: String,
+    name: String,
+    age: i32,
+}
+
+impl User {
+    pub fn new(id: &str, name: &str, age: i32) -> Self {
+        User {
+            id: id.into(),
+            name: name.into(),
+            age,
+        }
+    }
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl HasId for User {
+    fn get_id(&self) -> &str {
+        &self.id
+    }
+}
+
+fn main() {}
+
 #[cfg(test)]
 mod tests {
-    extern crate rand;
-    extern crate test;
     use super::*;
     use rand::prelude::*;
     use test::Bencher;
-    // Demo user struct
-    // We are going to use this in all the internal tests.
-    struct User {
-        id: String,
-        name: String,
-        age: i32,
-        description: String,
-        favorit_numbers: Vec<i32>,
-        favorit_colors: Vec<String>,
-    }
-    impl User {
-        // Construct new user
-        fn new(id: &str, name: &str, age: i32) -> Self {
-            User {
-                id: id.into(),
-                name: name.into(),
-                age,
-                description: "".into(),
-                favorit_numbers: Vec::new(),
-                favorit_colors: Vec::new(),
-            }
-        }
-        // Get name
-        fn get_name(&self) -> &str {
-            &self.name
-        }
-        // Set name
-        fn set_name(&mut self, name: &str) {
-            self.name = name.into();
-        }
-        fn get_description(&self) -> &str {
-            &self.description
-        }
-    }
-    impl<'a> StorageObject<'a> for User {
-        fn load(&'a mut self, data: &str) -> StorageResult<()> {
-            Ok(())
-        }
-    }
-    impl StorageHasID for User {
-        fn get_id(&self) -> &str {
-            &self.id
-        }
-    }
     // Generate random string with a given lenght.
     // Using english alphabet + integers + a few other basic characters.
     fn build_string(length: i32) -> String {
@@ -158,7 +185,7 @@ mod tests {
         let chars = [
             'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q',
             'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7',
-            '8', '9', ' ', '_', '-', '.', '*',
+            '8', '9', '_',
         ];
         for ch in 0..length {
             string.push(
@@ -170,253 +197,230 @@ mod tests {
         string
     }
     #[test]
-    fn test_build_string() {
-        let res = build_string(10);
-        assert_eq!(res.len(), 10);
-    }
-    // Storage builder for tests.
-    fn build_user_storage_of_dummies(size_of_storage: i32) -> Storage<User> {
-        let mut storage: Storage<User> = Storage::new("data");
-        for index in 0..size_of_storage {
-            let mut user = User::new(
-                &format!("{}", index),
-                &build_string(20),
-                rand::thread_rng().gen_range(10, 70),
-            );
-            user.description = build_string(1000);
-            user.favorit_colors = vec![build_string(5), build_string(10), build_string(7)];
-            user.favorit_numbers = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-            storage.add_to_storage(user).unwrap();
+    fn test_storage_iter() {
+        let storage = Storage::new("Data");
+        let u1 = User::new("kriszta916", "Kriszti", 27);
+        let u2 = User::new("purucka92", "Gabi", 27);
+        let u3 = User::new("mezeipetister", "Peti", 31);
+        storage.add(u1).unwrap();
+        storage.add(u2).unwrap();
+        storage.add(u3).unwrap();
+        let mut index = 0;
+        for _ in &storage {
+            index += 1;
         }
-        storage
+        assert_eq!(index, 3);
+        let result = &storage
+            .into_iter()
+            .filter(|u| u.get(|u| u.age < 31))
+            .map(|u| u.get(|u| u.age))
+            .collect::<Vec<i32>>();
+        assert_eq!(result.len(), 2);
+    }
+    #[test]
+    fn test_storage_add() {
+        let storage = Storage::new("Data");
+        let u1 = User::new("kriszta916", "Kriszti", 27);
+        let u2 = User::new("purucka92", "Gabi", 27);
+        let u3 = User::new("mezeipetister", "Peti", 31);
+        storage.add(u1).unwrap();
+        storage.add(u2).unwrap();
+        storage.add(u3).unwrap();
+        let result = storage.get_by_id("purucka92").unwrap();
+        assert_eq!(&result.get(|u| u.name.to_owned()), "Gabi");
+        assert_eq!(&result.get(|u| u.get_name().to_owned()), "Gabi");
+    }
+    #[bench]
+    fn bench_storage_data(b: &mut Bencher) {
+        let storage = Storage::new("data");
+        for _ in 0..100000 {
+            let u = User::new(
+                &build_string(50),
+                &build_string(100),
+                rand::thread_rng().gen_range(10, 90),
+            );
+            storage.add(u).unwrap();
+        }
+        b.iter(|| {
+            let data = storage.data();
+            println!("{}", data.len());
+        });
+    }
+    #[bench]
+    fn bench_storage_get_by_id(b: &mut Bencher) {
+        let storage = Storage::new("data");
+        for _ in 0..1000000 {
+            let u = User::new(
+                &build_string(50),
+                &build_string(100),
+                rand::thread_rng().gen_range(10, 90),
+            );
+            storage.add(u).unwrap();
+        }
+        let u3 = User::new("mezeipetister", "Peti", 31);
+        storage.add(u3).unwrap();
+        b.iter(|| {
+            let result = storage.get_by_id("purucka92");
+            println!("{}", result.is_ok());
+        });
+    }
+    #[bench]
+    fn bench_storage_iter_filter(b: &mut Bencher) {
+        let storage = Storage::new("data");
+        for _ in 0..100000 {
+            let u = User::new(
+                &build_string(50),
+                &build_string(100),
+                rand::thread_rng().gen_range(10, 90),
+            );
+            storage.add(u).unwrap();
+        }
+        let u3 = User::new("mezeipetister", "Peti", 31);
+        storage.add(u3).unwrap();
+        b.iter(|| {
+            let result = storage
+                .into_iter()
+                .filter(|u| u.get(|u| u.get_id() == "mezeipetister"))
+                .map(|u| u.get(|u| u.age))
+                .collect::<Vec<i32>>();
+            println!("{}", result.len());
+        });
+    }
+    #[test]
+    fn test_storage_iter_filter() {
+        let storage = Storage::new("data");
+        for _ in 0..1000 {
+            let u = User::new(
+                &build_string(50),
+                &build_string(100),
+                rand::thread_rng().gen_range(10, 90),
+            );
+            storage.add(u).unwrap();
+        }
+        let u3 = User::new("mezeipetister", "Peti", 31);
+        storage.add(u3).unwrap();
+        let result = storage
+            .into_iter()
+            .filter(|u| u.get(|u| u.get_id() == "mezeipetister"))
+            .map(|u| u.get(|u| u.age))
+            .collect::<Vec<i32>>();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.get(0).unwrap(), &31);
+    }
+    #[bench]
+    fn bench_storage_iter_fold(b: &mut Bencher) {
+        let storage = Storage::new("data");
+        for _ in 0..100000 {
+            let u = User::new(
+                &build_string(50),
+                &build_string(100),
+                rand::thread_rng().gen_range(10, 90),
+            );
+            storage.add(u).unwrap();
+        }
+        b.iter(|| {
+            let result = storage.into_iter().fold(0, |sum, u| sum + u.get(|u| u.age));
+            println!("{}", result);
+        });
+    }
+    #[bench]
+    fn bench_storage_iter_fold_string_contains(b: &mut Bencher) {
+        let storage = Storage::new("data");
+        for _ in 0..100000 {
+            let u = User::new(
+                &build_string(50),
+                &build_string(100),
+                rand::thread_rng().gen_range(10, 90),
+            );
+            storage.add(u).unwrap();
+        }
+        let u3 = User::new("mezeipetister", "Peti", 31);
+        storage.add(u3).unwrap();
+        b.iter(|| {
+            let result = storage
+                .into_iter()
+                .filter(|u| u.get(|u| u.get_name().contains("mezei")))
+                .map(|u| u.get(|u| u.age))
+                .collect::<Vec<i32>>();
+            println!("{}", result.len());
+        });
+    }
+    #[test]
+    fn test_storage_iter_fold() {
+        let storage = Storage::new("data");
+        for _ in 0..1000 {
+            let u = User::new(
+                &build_string(50),
+                &build_string(100),
+                rand::thread_rng().gen_range(10, 90),
+            );
+            storage.add(u).unwrap();
+        }
+        let result = storage.into_iter().fold(0, |sum, u| sum + u.get(|u| u.age));
+        assert_eq!(result > 1000, true);
+    }
+    #[test]
+    fn test_storage_add_multiple() {
+        let storage = Storage::new("data");
+        for _ in 0..100000 {
+            let u = User::new(
+                &build_string(50),
+                &build_string(100),
+                rand::thread_rng().gen_range(10, 90),
+            );
+            storage.add(u).unwrap();
+        }
+        assert_eq!(storage.data.lock().unwrap().len(), 100000);
     }
     #[bench]
     fn bench_storage_add(b: &mut Bencher) {
-        let mut storage = build_user_storage_of_dummies(1000);
-        b.iter(|| {
-            let _ = storage.add_to_storage(User::new(
-                &format!("{}", rand::thread_rng().gen_range(1000, 1000000)),
-                "Demo bench",
-                12,
-            ));
-        })
-    }
-    #[bench]
-    fn bench_storage_get_by_id_from_1000(b: &mut Bencher) {
-        let mut storage = build_user_storage_of_dummies(10000);
-        let _ = storage.add_to_storage(User::new("demo_id", "Demo bench", 12));
-        b.iter(|| {
-            let _ = storage.get_by_id("demo_id");
-        })
-    }
-    #[bench]
-    fn bench_storage_update_name(b: &mut Bencher) {
-        let mut storage = build_user_storage_of_dummies(1000);
-        b.iter(|| {
-            for item in storage.get() {
-                item.update(|u| u.set_name("Demo modified name"));
-                // item.get_mut().name = "Demo modified name".to_owned();
-            }
-        })
-    }
-    #[bench]
-    fn bench_storage_filter(b: &mut Bencher) {
-        let mut storage = build_user_storage_of_dummies(1000);
-        let mut u1 = User::new("demo_id_iter1", "Lorem Ipsum", 9);
-        u1.description = "Lorem Ipsum".to_owned();
-        let mut u2 = User::new("demo_id_iter2", "Lorem Demo Item", 9);
-        u2.description = "Lorem Demo Item".to_owned();
-        storage.add_to_storage(u1).unwrap();
-        storage.add_to_storage(u2).unwrap();
-        b.iter(|| {
-            let mut res: Vec<String> = Vec::new();
-            for item in storage.get() {
-                if item.get(|x| x.get_description().contains("Lorem")) == true {
-                    res.push(item.get(|x| x.get_name().to_owned()));
-                }
-            }
-        })
-    }
-    #[test]
-    fn test_storage_iter() {
-        let mut storage = build_user_storage_of_dummies(1000);
-        let mut u1 = User::new("demo_id_iter1", "Lorem Ipsum", 9);
-        u1.description = "Lorem Ipsum".to_owned();
-        let mut u2 = User::new("demo_id_iter2", "Lorem Demo Item", 9);
-        u2.description = "Lorem Demo Item".to_owned();
-        storage.add_to_storage(u1).unwrap();
-        storage.add_to_storage(u2).unwrap();
-        let mut res: Vec<String> = Vec::new();
-        for item in storage.get() {
-            if item.get(|x| x.get_name().contains("Lorem")) == true {
-                res.push(item.get(|x| x.get_name().to_owned()));
-            }
+        let storage = Storage::new("data");
+        for _ in 0..100000 {
+            let u = User::new(
+                &build_string(50),
+                &build_string(100),
+                rand::thread_rng().gen_range(10, 90),
+            );
+            storage.add(u).unwrap();
         }
-        assert_eq!(res.len(), 2);
-        assert_eq!(res.get(0).unwrap(), "Lorem Ipsum");
-        assert_eq!(res.get(1).unwrap(), "Lorem Demo Item");
+        b.iter(|| {
+            storage
+                .add(User::new(
+                    &build_string(20),
+                    &build_string(50),
+                    rand::thread_rng().gen_range(10, 90),
+                ))
+                .unwrap();
+        });
     }
-    // use super::*;
-    // #[test]
-    // fn test_storage_id() {
-    //     impl StorageHasID for i32 {
-    //         fn get_id(&self) -> &str {
-    //             let res: &'static str = "a";
-    //             res
-    //         }
-    //     }
-    //     assert_eq!(3.get_id(), "a");
-    // }
-    // #[test]
-    // fn basic_test() {
-    //     pub trait UserT {
-    //         fn get_name(&self) -> String;
-    //         fn set_name(&mut self, name: &str);
-    //     }
-    //     struct User {
-    //         id: String,
-    //         name: String,
-    //     }
-    //     impl User {
-    //         fn new(id: &str, name: &str) -> Self {
-    //             User {
-    //                 id: id.into(),
-    //                 name: name.into(),
-    //             }
-    //         }
-    //     }
-    //     impl UserT for User {
-    //         fn set_name(&mut self, name: &str) {
-    //             self.name = name.into();
-    //         }
-    //         fn get_name(&self) -> String {
-    //             self.name.to_owned()
-    //         }
-    //     }
-    //     impl<'a> StorageObject<'a> for User {
-    //         fn load(&'a mut self, data: &str) -> StorageResult<()> {
-    //             Ok(())
-    //         }
-    //     }
-    //     impl StorageHasID for User {
-    //         fn get_id(&self) -> &str {
-    //             &self.id
-    //         }
-    //     }
-    //     let mut storage: Storage<User> = Storage::new("data");
-    //     storage.add_to_storage(User::new("1", "Kriszti")).unwrap();
-    //     storage.add_to_storage(User::new("2", "Peti")).unwrap();
-    //     storage.add_to_storage(User::new("3", "Gabi")).unwrap();
-
-    //     // let mut a = vec![1,2,3,4,5];
-    //     // a.iter_mut();
-
-    //     assert_eq!(
-    //         storage.get_by_id("1").unwrap().get(|u| (*u).get_name()),
-    //         "Kriszti"
-    //     );
-    //     // assert_eq!(storage.get_by_id("2").unwrap().get(), "Peti");
-    //     // assert_eq!(storage.get_by_id("3").unwrap().get().name, "Gabi");
-    //     storage
-    //         .get_by_id("3")
-    //         .unwrap()
-    //         .update(|u| u.set_name("Gabi!"));
-    //     // let res = storage.get_by_id("3").unwrap().update(|u| -> bool {
-    //     //     u.set_name("Gabi!!!!");
-    //     //     true
-    //     // });
-    //     assert_eq!(
-    //         storage.get_by_id("3").unwrap().get(|u| u.name.to_owned()),
-    //         "Gabi!"
-    //     );
-    // assert_eq!(res, true);
-    // // Demo result type alias
-    // pub type DemoResult<T> = Result<T, ErrorI>;
-
-    // pub enum ErrorI {
-    //     Error,
-    // }
-
-    // // Well formatted display text for users
-    // // TODO: Use error code and language translation for end-user error messages.
-    // impl std::fmt::Display for ErrorI {
-    //     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    //         match self {
-    //             ErrorI::Error => write!(f, "Internal error"),
-    //         }
-    //     }
-    // }
-
-    // impl std::fmt::Debug for ErrorI {
-    //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    //         match self {
-    //             ErrorI::Error => write!(f, "Internal error!"),
-    //         }
-    //     }
-    // }
-
-    // let res = storage
-    //     .get_by_id("3")
-    //     .unwrap()
-    //     .update(|u| -> DemoResult<()> {
-    //         u.set_name("Gabi!!!!");
-    //         Ok(())
-    //     });
-    // assert_eq!(res.is_ok(), true);
-    // assert_eq!(storage.get_by_id("3").unwrap().get().name, "Gabi!!!!");
-    // assert_eq!(storage.get_by_id("4").is_err(), true);
-
-    // let u1 = storage.get_by_id("1").unwrap().get();
-    // assert_eq!(u1.name, "Kriszti");
-
-    // if let Ok(u1) = storage.get_by_id("1") {
-    //     assert_eq!(u1.get().name, "Kriszti");
-    // }
-
-    // if let Ok(mut u2) = storage.get_by_id("1") {
-    //     u2.get_mut().set_name("Kriszti!");
-    // }
-    // assert_eq!(storage.get_by_id("1").unwrap().get().name, "Kriszti!");
-    // }
+    #[bench]
+    fn bench_vec_sort_i32(b: &mut Bencher) {
+        let mut vector = (0..100000)
+            .map(|x| rand::thread_rng().gen_range(0, 10000000))
+            .collect::<Vec<i32>>();
+        b.iter(|| {
+            vector.sort();
+            println!("{}", vector.len());
+        });
+    }
+    #[bench]
+    fn bench_vec_sort_string(b: &mut Bencher) {
+        let mut vector = (0..100000)
+            .map(|x| build_string(20))
+            .collect::<Vec<String>>();
+        b.iter(|| {
+            vector.sort();
+            println!("{}", vector.len());
+        });
+    }
+    #[bench]
+    fn bench_vec_sort_string_short(b: &mut Bencher) {
+        let mut vector = (0..100000)
+            .map(|x| build_string(5))
+            .collect::<Vec<String>>();
+        b.iter(|| {
+            vector.sort();
+            println!("{}", vector.len());
+        });
+    }
 }
-
-// pub struct Storage<T> {
-//     data: T,
-//     path: &'static str,
-// }
-
-// pub trait StorageObject {}
-
-// pub trait LoadFrom<T> {
-//     fn load_from(path: &str) -> StorageResult<T>;
-// }
-
-// impl<T> LoadFrom<T> for T
-// where
-//     T: StorageObject,
-// {
-//     fn load_from(path: &str) -> StorageResult<T> {
-//         Err(Error::InternalError("oo".into()))
-//     }
-// }
-
-// impl<T, U> LoadFrom<U> for Vec<T>
-// where
-//     T: StorageObject,
-// {
-//     fn load_from(path: &str) -> StorageResult<U> {
-//         Err(Error::InternalError("oo".into()))
-//     }
-// }
-
-// impl<T> Storage<T>
-// where
-//     T: LoadFrom<T>,
-// {
-//     pub fn load_from(path: &'static str) -> StorageResult<Storage<T>> {
-//         Ok(Storage {
-//             data: T::load_from(path)?,
-//             path,
-//         })
-//     }
-// }
