@@ -19,52 +19,49 @@
 
 mod prelude;
 pub use prelude::*;
+use std::collections::BTreeMap;
 use std::mem;
 
-// Need this?
-pub trait StorageHasID {
+pub trait StorageMember<'a> {
     fn get_id(&self) -> &str;
 }
 
-// Really?
-pub trait StorageObject<'a> {
-    fn load(&'a mut self, data: &str) -> StorageResult<()>;
-}
-
 pub struct Storage<T> {
-    data: T,
+    data: Vec<T>,
+    lookup_table: BTreeMap<String, usize>,
     path: &'static str,
 }
 
-impl<'a, T: 'a> Storage<Vec<T>>
+impl<'a, T: 'a> Storage<T>
 where
-    T: StorageObject<'a> + StorageHasID,
+    T: StorageMember<'a>,
 {
     pub fn new(path: &'static str) -> Self {
         Storage {
             data: Vec::new(),
+            lookup_table: BTreeMap::new(),
             path,
         }
     }
     pub fn get_by_id(&'a mut self, id: &str) -> StorageResult<DataObject<T>> {
-        for item in &mut self.data {
-            if item.get_id() == id {
-                return Ok(DataObject {
-                    data: item,
-                    path: self.path,
-                });
-            }
+        match self.lookup_table.get_key_value(id) {
+            Some(r) => Ok(DataObject {
+                data: self.data.get_mut(*r.1).unwrap(),
+                path: self.path,
+            }),
+            None => Err(Error::InternalError(format!("ID: {} not found", id))),
         }
-        Err(Error::InternalError(format!("ID: {} not found", id)))
     }
     // TODO: implement ID is unique check!
     pub fn add_to_storage(&'a mut self, new_object: T) -> StorageResult<()> {
+        self.lookup_table
+            .insert(new_object.get_id().into(), self.data.len());
         self.data.push(new_object);
         Ok(())
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut Storage<Vec<T>> {
+impl<'a, T> IntoIterator for &'a mut Storage<T> {
     type Item = DataObject<'a, T>;
     type IntoIter = DataIter<'a, T>;
     fn into_iter(self) -> Self::IntoIter {
@@ -105,10 +102,14 @@ pub struct DataObject<'a, T: 'a> {
 }
 
 impl<'a, T> DataObject<'a, T> {
-    pub fn get(self) -> &'a T {
+    pub fn get_ref(self) -> &'a T {
         self.data
     }
-    pub fn get_mut(self) -> &'a mut T {
+    #[deprecated(
+        since = "0.1.0",
+        note = "Deprecated function, just for internal test purpose. Please use update instead."
+    )]
+    pub fn get_ref_mut(self) -> &'a mut T {
         self.data
     }
     pub fn update<F: 'a, R>(&'a mut self, mut f: F) -> R
@@ -157,12 +158,7 @@ mod tests {
             self.name = name.into();
         }
     }
-    impl<'a> StorageObject<'a> for User {
-        fn load(&'a mut self, data: &str) -> StorageResult<()> {
-            Ok(())
-        }
-    }
-    impl StorageHasID for User {
+    impl<'a> StorageMember<'a> for User {
         fn get_id(&self) -> &str {
             &self.id
         }
@@ -191,15 +187,15 @@ mod tests {
         assert_eq!(res.len(), 10);
     }
     // Storage builder for tests.
-    fn build_user_storage_of_dummies(size_of_storage: i32) -> Storage<Vec<User>> {
-        let mut storage: Storage<Vec<User>> = Storage::new("data");
+    fn build_user_storage_of_dummies(size_of_storage: i32) -> Storage<User> {
+        let mut storage: Storage<User> = Storage::new("data");
         for index in 0..size_of_storage {
             let mut user = User::new(
                 &format!("{}", index),
                 &build_string(20),
                 rand::thread_rng().gen_range(10, 70),
             );
-            user.description = build_string(1000);
+            user.description = build_string(50);
             user.favorit_colors = vec![build_string(5), build_string(10), build_string(7)];
             user.favorit_numbers = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
             storage.add_to_storage(user).unwrap();
@@ -208,7 +204,7 @@ mod tests {
     }
     #[bench]
     fn bench_storage_add(b: &mut Bencher) {
-        let mut storage = build_user_storage_of_dummies(1000);
+        let mut storage = build_user_storage_of_dummies(100000);
         b.iter(|| {
             let _ = storage.add_to_storage(User::new(
                 &format!("{}", rand::thread_rng().gen_range(1000, 1000000)),
@@ -218,8 +214,8 @@ mod tests {
         })
     }
     #[bench]
-    fn bench_storage_get_by_id_from_1000(b: &mut Bencher) {
-        let mut storage = build_user_storage_of_dummies(10000);
+    fn bench_storage_get_by_id(b: &mut Bencher) {
+        let mut storage = build_user_storage_of_dummies(100000);
         let _ = storage.add_to_storage(User::new("demo_id", "Demo bench", 12));
         b.iter(|| {
             let _ = storage.get_by_id("demo_id");
@@ -227,10 +223,10 @@ mod tests {
     }
     #[bench]
     fn bench_storage_update_name(b: &mut Bencher) {
-        let mut storage = build_user_storage_of_dummies(1000);
+        let mut storage = build_user_storage_of_dummies(100000);
         b.iter(|| {
             for item in &mut storage {
-                item.get_mut().name = "Demo modified name".to_owned();
+                item.update(|u| u.set_name("Demo modified name");
             }
         })
     }
@@ -250,6 +246,67 @@ mod tests {
                 .map(|x| (x).data.name.to_owned())
                 .collect::<Vec<String>>();
         })
+    }
+    pub fn demo(i: i32) {
+        println!("{}", i);
+    }
+    #[bench]
+    fn bench_storage_filter_fold_i32(b: &mut Bencher) {
+        let mut storage = build_user_storage_of_dummies(1000000);
+        let mut u1 = User::new("demo_id_iter1", "Lorem Ipsum", 9);
+        u1.description = "Lorem Ipsum".to_owned();
+        let mut u2 = User::new("demo_id_iter2", "Lorem Demo Item", 9);
+        u2.description = "Lorem Demo Item".to_owned();
+        storage.add_to_storage(u1).unwrap();
+        storage.add_to_storage(u2).unwrap();
+        b.iter(|| {
+            let x = storage.into_iter().fold(0, |acc, u| acc + (u).data.age);
+            demo(x);
+        })
+    }
+    #[bench]
+    fn bench_storage_filter_foreach(b: &mut Bencher) {
+        let mut storage = build_user_storage_of_dummies(1000000);
+        let mut u1 = User::new("demo_id_iter1", "Lorem Ipsum", 9);
+        u1.description = "Lorem Ipsum".to_owned();
+        let mut u2 = User::new("demo_id_iter2", "Lorem Demo Item", 9);
+        u2.description = "Lorem Demo Item".to_owned();
+        storage.add_to_storage(u1).unwrap();
+        storage.add_to_storage(u2).unwrap();
+        b.iter(|| {
+            let mut age_total = 0;
+            let mut age_max = 0;
+            let mut age_min = 100;
+            storage.into_iter().for_each(|u| {
+                age_total += u.data.age;
+                if u.data.age > age_max {
+                    age_max = u.data.age;
+                }
+                if u.data.age < age_min {
+                    age_min = u.data.age;
+                }
+            });
+            println!("{}", age_total);
+            println!("{}", age_max);
+            println!("{}", age_min);
+        })
+    }
+    #[bench]
+    fn bench_storage_filter_fold_i32_average(b: &mut Bencher) {
+        let mut storage = build_user_storage_of_dummies(100000);
+        b.iter(|| {
+            let a = storage.into_iter().fold(0, |acc, u| acc + (u).data.age)
+                / storage.into_iter().data.len() as i32;
+            println!("{}", a);
+        })
+    }
+    #[test]
+    fn test_storage_filter_fold_i32() {
+        let mut storage = build_user_storage_of_dummies(100);
+        assert_eq!(
+            storage.into_iter().fold(0, |acc, u| acc + (u).data.age) > 1000,
+            true
+        );
     }
     #[test]
     fn test_storage_iter() {
@@ -271,7 +328,7 @@ mod tests {
     }
     #[test]
     fn test_storage_id() {
-        impl StorageHasID for i32 {
+        impl<'a> StorageMember<'a> for i32 {
             fn get_id(&self) -> &str {
                 let res: &'static str = "a";
                 res
@@ -281,7 +338,7 @@ mod tests {
     }
     #[test]
     fn basic_test() {
-        let mut storage: Storage<Vec<User>> = Storage::new("data");
+        let mut storage: Storage<User> = Storage::new("data");
         storage
             .add_to_storage(User::new("1", "Kriszti", 27))
             .unwrap();
@@ -291,15 +348,15 @@ mod tests {
         // let mut a = vec![1,2,3,4,5];
         // a.iter_mut();
 
-        assert_eq!(storage.get_by_id("1").unwrap().get().name, "Kriszti");
+        assert_eq!(storage.get_by_id("1").unwrap().get_ref().name, "Kriszti");
         if let Ok(user) = storage.get_by_id("1") {
-            assert_eq!(user.get().name, "Kriszti");
+            assert_eq!(user.get_ref().name, "Kriszti");
         }
         let u1 = storage.get_by_id("1").unwrap();
-        assert_eq!(u1.get().name, "Kriszti");
+        assert_eq!(u1.get_ref().name, "Kriszti");
 
-        assert_eq!(storage.get_by_id("2").unwrap().get().name, "Peti");
-        assert_eq!(storage.get_by_id("3").unwrap().get().name, "Gabi");
+        assert_eq!(storage.get_by_id("2").unwrap().get_ref().name, "Peti");
+        assert_eq!(storage.get_by_id("3").unwrap().get_ref().name, "Gabi");
 
         storage
             .get_by_id("3")
@@ -343,28 +400,28 @@ mod tests {
                 Ok(())
             });
         assert_eq!(res.is_ok(), true);
-        assert_eq!(storage.get_by_id("3").unwrap().get().name, "Gabi!!!!");
+        assert_eq!(storage.get_by_id("3").unwrap().get_ref().name, "Gabi!!!!");
         assert_eq!(storage.get_by_id("4").is_err(), true);
 
-        let u1 = storage.get_by_id("1").unwrap().get();
+        let u1 = storage.get_by_id("1").unwrap().get_ref();
         assert_eq!(u1.name, "Kriszti");
 
         if let Ok(u1) = storage.get_by_id("1") {
-            assert_eq!(u1.get().name, "Kriszti");
+            assert_eq!(u1.get_ref().name, "Kriszti");
         }
 
-        if let Ok(mut u2) = storage.get_by_id("1") {
-            u2.get_mut().set_name("Kriszti!");
+        if let Ok(u2) = storage.get_by_id("1") {
+            u2.update(|u| u.set_name("Kriszti!"));
         }
-        assert_eq!(storage.get_by_id("1").unwrap().get().name, "Kriszti!");
+        assert_eq!(storage.get_by_id("1").unwrap().get_ref().name, "Kriszti!");
 
         for mut user in &mut storage {
             user.update(|u| u.set_name("Bruhaha"));
         }
 
-        assert_eq!(storage.get_by_id("1").unwrap().get().name, "Bruhaha");
-        assert_eq!(storage.get_by_id("2").unwrap().get().name, "Bruhaha");
-        assert_eq!(storage.get_by_id("3").unwrap().get().name, "Bruhaha");
+        assert_eq!(storage.get_by_id("1").unwrap().get_ref().name, "Bruhaha");
+        assert_eq!(storage.get_by_id("2").unwrap().get_ref().name, "Bruhaha");
+        assert_eq!(storage.get_by_id("3").unwrap().get_ref().name, "Bruhaha");
     }
 }
 
