@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::mem;
 
-pub trait StorageMember {
+pub trait StorageMember<'de>: Serialize + Deserialize<'de> {
     fn get_id(&self) -> &str;
 }
 
@@ -37,7 +37,7 @@ pub struct Storage<T> {
 
 impl<'a, T: 'a> Storage<T>
 where
-    for<'de> T: StorageMember + Deserialize<'de> + Serialize,
+    for<'de> T: StorageMember<'de> + Deserialize<'de> + Serialize,
 {
     pub fn new(path: &'static str) -> Self {
         manage_path(path).unwrap();
@@ -113,9 +113,9 @@ pub struct DataObject<'a, T: 'a> {
     path: &'static str,
 }
 
-impl<'a, T> DataObject<'a, T>
+impl<'a, 'de, T> DataObject<'a, T>
 where
-    T: StorageMember + Serialize,
+    T: StorageMember<'de> + Serialize,
 {
     pub fn get_ref(self) -> &'a T {
         self.data
@@ -180,7 +180,7 @@ mod tests {
             self.name = name.into();
         }
     }
-    impl StorageMember for User {
+    impl<'de> StorageMember<'de> for User {
         fn get_id(&self) -> &str {
             &self.id
         }
@@ -350,7 +350,7 @@ mod tests {
     }
     #[test]
     fn test_storage_id() {
-        impl StorageMember for i32 {
+        impl<'de> StorageMember<'de> for i32 {
             fn get_id(&self) -> &str {
                 let res: &'static str = "a";
                 res

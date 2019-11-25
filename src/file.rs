@@ -46,7 +46,7 @@ use std::path::Path;
 /// ```
 pub fn load_storage<'a, T>(path: &'static str) -> StorageResult<Storage<T>>
 where
-    for<'de> T: Deserialize<'de> + 'a + StorageMember + Serialize,
+    for<'de> T: Deserialize<'de> + 'a + StorageMember<'de> + Serialize,
 {
     let mut storage: Storage<T> = Storage::new(path);
     for item in load::<T>(path)? {
@@ -153,9 +153,12 @@ where
  * Save storage into object!
  * TODO: Doc comments + example code
  */
-pub fn save_storage_object<'a, T>(storage_object: &'a T, path: &'static str) -> StorageResult<()>
+pub fn save_storage_object<'a, 'de, T>(
+    storage_object: &'a T,
+    path: &'static str,
+) -> StorageResult<()>
 where
-    T: StorageMember + Serialize,
+    T: StorageMember<'de> + Serialize,
 {
     // TODO: Proper error handling please!
     File::create(&format!("{}/{}.yml", path, storage_object.get_id(),))

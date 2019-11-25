@@ -48,7 +48,7 @@ impl User {
         self.name = name.into();
     }
 }
-impl StorageMember for User {
+impl<'de> StorageMember<'de> for User {
     fn get_id(&self) -> &str {
         &self.id
     }
