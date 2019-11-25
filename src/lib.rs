@@ -17,12 +17,15 @@
 
 #![feature(test)]
 
+mod file;
 mod prelude;
+use file::*;
 pub use prelude::*;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::mem;
 
-pub trait StorageMember<'a> {
+pub trait StorageMember {
     fn get_id(&self) -> &str;
 }
 
@@ -34,7 +37,7 @@ pub struct Storage<T> {
 
 impl<'a, T: 'a> Storage<T>
 where
-    T: StorageMember<'a>,
+    for<'de> T: StorageMember + Deserialize<'de> + Serialize,
 {
     pub fn new(path: &'static str) -> Self {
         Storage {
@@ -42,6 +45,9 @@ where
             lookup_table: BTreeMap::new(),
             path,
         }
+    }
+    pub fn load(path: &'static str) -> StorageResult<Self> {
+        load_storage(path)
     }
     pub fn get_by_id(&'a mut self, id: &str) -> StorageResult<DataObject<T>> {
         match self.lookup_table.get_key_value(id) {
@@ -54,9 +60,13 @@ where
     }
     // TODO: implement ID is unique check!
     pub fn add_to_storage(&'a mut self, new_object: T) -> StorageResult<()> {
-        self.lookup_table
-            .insert(new_object.get_id().into(), self.data.len());
+        let mut id: String = String::new();
+        {
+            id = new_object.get_id().to_owned();
+        }
+        self.lookup_table.insert(id.clone(), self.data.len());
         self.data.push(new_object);
+        self.get_by_id(&id)?.save()?;
         Ok(())
     }
 }
@@ -101,7 +111,10 @@ pub struct DataObject<'a, T: 'a> {
     path: &'static str,
 }
 
-impl<'a, T> DataObject<'a, T> {
+impl<'a, T> DataObject<'a, T>
+where
+    T: StorageMember + Serialize,
+{
     pub fn get_ref(self) -> &'a T {
         self.data
     }
@@ -116,7 +129,13 @@ impl<'a, T> DataObject<'a, T> {
     where
         F: FnMut(&mut T) -> R,
     {
-        f(self.data)
+        let res = f(self.data);
+        self.save().unwrap();
+        res
+    }
+    fn save(&'a self) -> StorageResult<()> {
+        save_storage_object(self.data, self.path)?;
+        Ok(())
     }
 }
 
@@ -129,6 +148,7 @@ mod tests {
     use test::Bencher;
     // Demo user struct
     // We are going to use this in all the internal tests.
+    #[derive(Serialize, Deserialize)]
     struct User {
         id: String,
         name: String,
@@ -158,7 +178,7 @@ mod tests {
             self.name = name.into();
         }
     }
-    impl<'a> StorageMember<'a> for User {
+    impl StorageMember for User {
         fn get_id(&self) -> &str {
             &self.id
         }
@@ -172,7 +192,7 @@ mod tests {
             'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7',
             '8', '9', ' ', '_', '-', '.', '*',
         ];
-        for ch in 0..length {
+        for _ in 0..length {
             string.push(
                 *chars
                     .get(rand::thread_rng().gen_range(0, chars.len()))
@@ -225,8 +245,8 @@ mod tests {
     fn bench_storage_update_name(b: &mut Bencher) {
         let mut storage = build_user_storage_of_dummies(100000);
         b.iter(|| {
-            for item in &mut storage {
-                item.update(|u| u.set_name("Demo modified name");
+            for mut item in &mut storage {
+                item.update(|u| u.set_name("Demo modified name"));
             }
         })
     }
@@ -328,7 +348,7 @@ mod tests {
     }
     #[test]
     fn test_storage_id() {
-        impl<'a> StorageMember<'a> for i32 {
+        impl StorageMember for i32 {
             fn get_id(&self) -> &str {
                 let res: &'static str = "a";
                 res
@@ -410,7 +430,7 @@ mod tests {
             assert_eq!(u1.get_ref().name, "Kriszti");
         }
 
-        if let Ok(u2) = storage.get_by_id("1") {
+        if let Ok(mut u2) = storage.get_by_id("1") {
             u2.update(|u| u.set_name("Kriszti!"));
         }
         assert_eq!(storage.get_by_id("1").unwrap().get_ref().name, "Kriszti!");
