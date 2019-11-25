@@ -55,6 +55,18 @@ where
     Ok(storage)
 }
 
+pub fn manage_path(path: &'static str) -> StorageResult<()> {
+    if !Path::new(path).exists() {
+        match fs::create_dir_all(path) {
+            Ok(_) => return Ok(()),
+            Err(_) => {
+                return Err(Error::PathNotFound);
+            }
+        }
+    }
+    Ok(())
+}
+
 fn load<'a, T>(path: &'static str) -> StorageResult<Vec<T>>
 where
     for<'de> T: Deserialize<'de> + 'a,

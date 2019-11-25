@@ -40,6 +40,7 @@ where
     for<'de> T: StorageMember + Deserialize<'de> + Serialize,
 {
     pub fn new(path: &'static str) -> Self {
+        manage_path(path).unwrap();
         Storage {
             data: Vec::new(),
             lookup_table: BTreeMap::new(),
@@ -47,6 +48,7 @@ where
         }
     }
     pub fn load(path: &'static str) -> StorageResult<Self> {
+        manage_path(path)?;
         load_storage(path)
     }
     pub fn get_by_id(&'a mut self, id: &str) -> StorageResult<DataObject<T>> {
