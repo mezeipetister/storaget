@@ -19,8 +19,19 @@ use std::fmt;
 
 pub type StorageResult<T> = Result<T, Error>;
 
+/// Storage Error type
+/// For internal use
 pub enum Error {
+    /// Any error that has a custom message.
+    /// Any kind of error that has no other
+    /// more specific variant in Error::*
     InternalError(String),
+    /// Object not found in a storage.
+    /// Usually using with get_by_id()
+    ObjectNotFound,
+    /// Path not found
+    /// Using at reading data from path.
+    PathNotFound,
 }
 
 // Well formatted display text for users
@@ -29,6 +40,8 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Error::InternalError(msg) => write!(f, "Internal error: {}", msg),
+            Error::ObjectNotFound => write!(f, "Storage object not found in storage."),
+            Error::PathNotFound => write!(f, "Path not found"),
         }
     }
 }
@@ -37,6 +50,8 @@ impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::InternalError(msg) => write!(f, "Internal error: {}", msg),
+            Error::ObjectNotFound => write!(f, "Storage object not found in storage."),
+            Error::PathNotFound => write!(f, "Path not found"),
         }
     }
 }
@@ -57,6 +72,13 @@ mod tests {
     #[test]
     fn test_error() {
         let e = Error::InternalError("test".into());
+        assert_eq!(format!("{}", e), "Internal error: test");
         assert_eq!(format!("{:?}", e), "Internal error: test");
+        let f = Error::ObjectNotFound;
+        assert_eq!(format!("{}", f), "Storage object not found in storage.");
+        assert_eq!(format!("{:?}", f), "Storage object not found in storage.");
+        let g = Error::PathNotFound;
+        assert_eq!(format!("{}", g), "Path not found");
+        assert_eq!(format!("{:?}", g), "Path not found");
     }
 }
