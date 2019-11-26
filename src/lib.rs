@@ -66,6 +66,7 @@ where
         Ok(())
     }
     pub fn get_by_id(&self, id: &str) -> StorageResult<DataObject<T>> {
+        let id = id.trim();
         match self.lookup_table.lock().unwrap().get_key_value(id) {
             Some(r) => Ok(DataObject::new(
                 self.data.lock().unwrap().get(*r.1).unwrap().clone(),
@@ -77,6 +78,7 @@ where
     pub fn get_by_ids(&self, ids: &[&str]) -> Vec<(String, StorageResult<DataObject<T>>)> {
         let mut result: Vec<(String, StorageResult<DataObject<T>>)> = Vec::new();
         for id in ids {
+            let id = id.trim();
             result.push(((*id).into(), self.get_by_id(id)));
         }
         result
