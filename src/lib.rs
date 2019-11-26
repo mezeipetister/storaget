@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-pub trait StorageObject: Serialize {
+pub trait StorageObject: Serialize + Clone {
     fn get_id(&self) -> &str;
     // fn load(&mut self, data: &str) -> StorageResult<()>;
 }
@@ -161,6 +161,9 @@ where
         save_storage_object(&*self.data.lock().unwrap(), self.path).unwrap();
         res
     }
+    pub fn clone_data(&self) -> T {
+        self.data.lock().unwrap().clone()
+    }
 }
 
 pub trait HasId {
@@ -173,7 +176,7 @@ mod tests {
     use rand::prelude::*;
     use test::Bencher;
     // Dummy struct for tests.
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Clone)]
     pub struct User {
         id: String,
         name: String,
