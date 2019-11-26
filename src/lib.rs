@@ -92,6 +92,12 @@ where
             .map(|v| v.clone())
             .collect::<Vec<Arc<Mutex<T>>>>()
     }
+    pub fn into_data_objects(&self) -> Vec<DataObject<T>> {
+        (&*self.data.lock().unwrap())
+            .into_iter()
+            .map(|v| DataObject::new(v.clone(), self.path))
+            .collect::<Vec<DataObject<T>>>()
+    }
     pub fn remove(&self) -> StorageResult<()> {
         remove_path(self.path)
     }
