@@ -15,7 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Project A.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::convert::From;
 use std::fmt;
+use std::io;
 
 pub type StorageResult<T> = Result<T, Error>;
 
@@ -32,6 +34,9 @@ pub enum Error {
     /// Path not found
     /// Using at reading data from path.
     PathNotFound,
+    SerializeError(String),
+    DeserializeError(String),
+    IOError(String),
 }
 
 // Well formatted display text for users
@@ -42,6 +47,7 @@ impl fmt::Display for Error {
             Error::InternalError(msg) => write!(f, "Internal error: {}", msg),
             Error::ObjectNotFound => write!(f, "Storage object not found in storage."),
             Error::PathNotFound => write!(f, "Path not found"),
+            _ => write!(f, "Unknown error"),
         }
     }
 }
@@ -52,7 +58,14 @@ impl fmt::Debug for Error {
             Error::InternalError(msg) => write!(f, "Internal error: {}", msg),
             Error::ObjectNotFound => write!(f, "Storage object not found in storage."),
             Error::PathNotFound => write!(f, "Path not found"),
+            _ => write!(f, "Unknown error"),
         }
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        Error::IOError(format!("{}", err))
     }
 }
 
