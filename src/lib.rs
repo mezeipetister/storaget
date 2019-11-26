@@ -56,10 +56,10 @@ where
         Ok(load_storage(path)?)
     }
     pub fn add_to_storage(&self, object: T) -> StorageResult<()> {
-        let mut data = self.data.lock().unwrap();
         if self.get_by_id(object.get_id()).is_ok() {
             return Err(Error::InternalError("ID has already exist".to_owned()));
         }
+        let mut data = self.data.lock().unwrap();
         self.lookup_table
             .lock()
             .unwrap()
@@ -252,9 +252,11 @@ mod tests {
         let u1 = User::new("kriszta916", "Kriszti", 27);
         let u2 = User::new("purucka92", "Gabi", 27);
         let u3 = User::new("mezeipetister", "Peti", 31);
-        storage.add_to_storage(u1).unwrap();
-        storage.add_to_storage(u2).unwrap();
-        storage.add_to_storage(u3).unwrap();
+        assert_eq!(storage.add_to_storage(u1).is_ok(), true);
+        assert_eq!(storage.add_to_storage(u2).is_ok(), true);
+        assert_eq!(storage.add_to_storage(u3.clone()).is_ok(), true);
+        assert_eq!(storage.add_to_storage(u3.clone()).is_ok(), false);
+        assert_eq!(storage.add_to_storage(u3.clone()).is_ok(), false);
         let result = storage.get_by_id("purucka92").unwrap();
         assert_eq!(&result.get(|u| u.name.to_owned()), "Gabi");
         assert_eq!(&result.get(|u| u.get_name().to_owned()), "Gabi");
