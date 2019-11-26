@@ -57,6 +57,9 @@ where
     }
     pub fn add_to_storage(&self, object: T) -> StorageResult<()> {
         let mut data = self.data.lock().unwrap();
+        if self.get_by_id(object.get_id()).is_ok() {
+            return Err(Error::InternalError("ID has already exist".to_owned()));
+        }
         self.lookup_table
             .lock()
             .unwrap()
