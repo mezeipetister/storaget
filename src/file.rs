@@ -14,6 +14,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with Project A.  If not, see <http://www.gnu.org/licenses/>.
+
 use crate::*;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -46,61 +47,61 @@ use std::path::Path;
 /// ```
 pub fn load_storage<'a, T>(path: &'static str) -> StorageResult<Storage<T>>
 where
-    for<'de> T: Deserialize<'de> + 'a + StorageMember<'de> + Serialize,
+    for<'de> T: Deserialize<'de> + 'a + StorageObject + Serialize,
 {
-    let mut storage: Storage<T> = Storage::new(path);
+    manage_path(path)?;
+    let storage: Storage<T> = Storage::new(path);
     for item in load::<T>(path)? {
         storage.add_to_storage(item)?;
     }
     Ok(storage)
 }
 
-pub fn manage_path(path: &'static str) -> StorageResult<()> {
+pub(crate) fn manage_path(path: &'static str) -> StorageResult<()> {
     if !Path::new(path).exists() {
         match fs::create_dir_all(path) {
             Ok(_) => return Ok(()),
-            Err(_) => {
-                return Err(Error::PathNotFound);
+            Err(err) => {
+                return Err(Error::InternalError(format!("{}", err)));
             }
         }
     }
     Ok(())
 }
 
+pub(crate) fn remove_path(path: &'static str) -> StorageResult<()> {
+    match fs::remove_dir_all(path) {
+        Ok(_) => return Ok(()),
+        Err(err) => {
+            return Err(Error::InternalError(format!("{}", err)));
+        }
+    }
+}
+
 fn load<'a, T>(path: &'static str) -> StorageResult<Vec<T>>
 where
     for<'de> T: Deserialize<'de> + 'a,
 {
-    if !Path::new(path).exists() {
-        match fs::create_dir_all(path) {
-            Ok(_) => (),
-            Err(_) => {
-                return Err(Error::PathNotFound);
-            }
-        }
-    } else {
-        let files_to_read = fs::read_dir(path)
-            .expect("Error during reading folder..")
-            .filter_map(|entry| {
-                entry.ok().and_then(|e| {
-                    e.path()
-                        .file_name()
-                        .and_then(|n| n.to_str().map(|s| String::from(s)))
-                })
+    let files_to_read = fs::read_dir(path)
+        .expect("Error during reading folder..")
+        .filter_map(|entry| {
+            entry.ok().and_then(|e| {
+                e.path()
+                    .file_name()
+                    .and_then(|n| n.to_str().map(|s| String::from(s)))
             })
-            .collect::<Vec<String>>();
-        let mut st_temp = Vec::new();
-        for file_name in files_to_read {
-            let mut content_temp = String::new();
-            File::open(Path::new(&format!("{}/{}", path, &file_name)))
-                .unwrap()
-                .read_to_string(&mut content_temp)
-                .unwrap();
-            st_temp.push(deserialize_object::<T>(&content_temp).unwrap());
-        }
-        return Ok(st_temp);
+        })
+        .collect::<Vec<String>>();
+    let mut st_temp = Vec::new();
+    for file_name in files_to_read {
+        let mut content_temp = String::new();
+        File::open(Path::new(&format!("{}/{}", path, &file_name)))
+            .unwrap()
+            .read_to_string(&mut content_temp)
+            .unwrap();
+        st_temp.push(deserialize_object::<T>(&content_temp).unwrap());
     }
-    return Err(Error::PathNotFound);
+    return Ok(st_temp);
 }
 
 /// # Serialize object<T> -> Result<String, String>
@@ -117,10 +118,13 @@ where
 /// let serialized_object = serialize_object(&dog).unwrap();
 /// assert_eq!(serialized_object, "---\nid: 1\nname: Puppy Joe".to_owned());
 /// ```
-pub fn serialize_object<T: Serialize>(object: &T) -> Result<String, String> {
+pub fn serialize_object<T>(object: &T) -> StorageResult<String>
+where
+    T: Serialize,
+{
     match serde_yaml::to_string(object) {
         Ok(result) => Ok(result),
-        Err(_) => Err("Error while data object serialisation.".to_owned()),
+        Err(err) => Err(Error::SerializeError(format!("{}", err))),
     }
 }
 
@@ -139,13 +143,13 @@ pub fn serialize_object<T: Serialize>(object: &T) -> Result<String, String> {
 /// ```
 /// IMPORTANT: deserializable struct currently cannot have &str field.
 //  TODO: Lifetime fix for `&str field type.
-pub fn deserialize_object<'a, T: ?Sized>(s: &str) -> Result<T, String>
+pub fn deserialize_object<'a, T: ?Sized>(s: &str) -> StorageResult<T>
 where
     for<'de> T: Deserialize<'de> + 'a,
 {
     match serde_yaml::from_str(s) {
         Ok(t) => Ok(t),
-        Err(_) => Err("Error while data object deserialization.".to_owned()),
+        Err(err) => Err(Error::DeserializeError(format!("{}", err))),
     }
 }
 
@@ -153,17 +157,12 @@ where
  * Save storage into object!
  * TODO: Doc comments + example code
  */
-pub fn save_storage_object<'a, 'de, T>(
-    storage_object: &'a T,
-    path: &'static str,
-) -> StorageResult<()>
+pub fn save_storage_object<'a, T>(storage_object: &'a T, path: &'static str) -> StorageResult<()>
 where
-    T: StorageMember<'de> + Serialize,
+    T: StorageObject + Serialize,
 {
     // TODO: Proper error handling please!
-    File::create(&format!("{}/{}.yml", path, storage_object.get_id(),))
-        .unwrap()
-        .write(serialize_object::<T>(storage_object).unwrap().as_bytes())
-        .unwrap();
+    File::create(&format!("{}/{}.yml", path, storage_object.get_id(),))?
+        .write(serialize_object::<T>(storage_object)?.as_bytes())?;
     Ok(())
 }

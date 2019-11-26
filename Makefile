@@ -9,4 +9,4 @@ build:
 	cargo build
 
 test:
-	cargo test test_
+	cargo test
