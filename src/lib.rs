@@ -391,7 +391,7 @@ mod tests {
     #[test]
     fn test_storage_add_multiple() {
         let storage = Storage::load_or_init::<User>("data/test17").unwrap();
-        for _ in 0..100000 {
+        for _ in 0..1000 {
             let u = User::new(
                 &build_string(50),
                 &build_string(100),
@@ -399,7 +399,7 @@ mod tests {
             );
             storage.add_to_storage(u).unwrap();
         }
-        assert_eq!(storage.data.lock().unwrap().len(), 100000);
+        assert_eq!(storage.data.lock().unwrap().len(), 1000);
         storage.remove().unwrap();
     }
     #[bench]
