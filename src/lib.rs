@@ -56,6 +56,9 @@ where
         Ok(load_storage(path)?)
     }
     pub fn add_to_storage(&self, object: T) -> StorageResult<()> {
+        if object.get_id().len() == 0 {
+            return Err(Error::InternalError("ID is empty".to_owned()));
+        }
         if self.get_by_id(object.get_id()).is_ok() {
             return Err(Error::InternalError("ID has already exist".to_owned()));
         }
