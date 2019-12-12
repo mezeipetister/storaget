@@ -168,6 +168,12 @@ where
     {
         f(&self.data.lock().unwrap())
     }
+    pub fn exec<F, R>(&self, mut f: F) -> R
+    where
+        F: FnMut(&T) -> R,
+    {
+        f(&self.data.lock().unwrap())
+    }
     pub fn update<F, R>(&self, mut f: F) -> R
     where
         F: FnMut(&mut T) -> R,
@@ -412,6 +418,22 @@ mod tests {
         }
         let result = storage.into_iter().fold(0, |sum, u| sum + u.get(|u| u.age));
         assert_eq!(result > 1000, true);
+        storage.remove().unwrap();
+    }
+    #[test]
+    fn test_storage_iter_exec() {
+        let storage = Storage::load_or_init::<User>("data/test67").unwrap();
+        for _ in 0..1000 {
+            let u = User::new(&build_string(50), &build_string(100), 1);
+            storage.add_to_storage(u).unwrap();
+        }
+        let mut i = 0;
+        storage.into_iter().for_each(|u| {
+            u.exec(|u| {
+                i += u.get_age();
+            })
+        });
+        assert_eq!(i == 1000, true);
         storage.remove().unwrap();
     }
     #[test]
