@@ -21,6 +21,7 @@ extern crate rand;
 extern crate test;
 pub mod prelude;
 pub use prelude::*;
+use std::sync::MutexGuard;
 pub mod file;
 pub use file::*;
 use serde::{Deserialize, Serialize};
@@ -178,6 +179,9 @@ where
     pub fn clone_data(&self) -> T {
         self.data.lock().unwrap().clone()
     }
+    pub fn get_data_ref(&self) -> MutexGuard<T> {
+        self.data.lock().unwrap()
+    }
 }
 
 pub trait HasId {
@@ -207,6 +211,9 @@ mod tests {
         }
         pub fn get_name(&self) -> &str {
             &self.name
+        }
+        pub fn get_age(&self) -> i32 {
+            self.age
         }
     }
 
@@ -457,6 +464,25 @@ mod tests {
         let u3 = User::new("mezeipetister", "Peti", 31);
         storage.add_to_storage(u3).unwrap();
         assert_eq!(storage.get_by_id("mezeipetister").is_ok(), true);
+        storage.remove().unwrap();
+    }
+    #[test]
+    fn test_get_data_ref() {
+        let storage = Storage::load_or_init::<User>("data/test19").unwrap();
+        for _ in 0..1000 {
+            let u = User::new(
+                &build_string(50),
+                &build_string(100),
+                rand::thread_rng().gen_range(10, 90),
+            );
+            storage.add_to_storage(u).unwrap();
+        }
+        let u3 = User::new("mezeipetister", "Peti", 31);
+        storage.add_to_storage(u3).unwrap();
+        let data = storage.get_by_id("mezeipetister").unwrap();
+        let d = data.get_data_ref();
+        assert_eq!(d.get_id(), "mezeipetister");
+        assert_eq!(d.get_age(), 31);
         storage.remove().unwrap();
     }
     #[test]
