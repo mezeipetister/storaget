@@ -95,11 +95,9 @@ where
     let mut st_temp = Vec::new();
     for file_name in files_to_read {
         let mut content_temp = String::new();
-        File::open(Path::new(&format!("{}/{}", path, &file_name)))
-            .unwrap()
-            .read_to_string(&mut content_temp)
-            .unwrap();
-        st_temp.push(deserialize_object::<T>(&content_temp).unwrap());
+        File::open(Path::new(&format!("{}/{}", path, &file_name)))?
+            .read_to_string(&mut content_temp)?;
+        st_temp.push(deserialize_object::<T>(&content_temp)?);
     }
     return Ok(st_temp);
 }

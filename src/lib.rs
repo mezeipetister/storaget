@@ -490,7 +490,7 @@ mod tests {
     }
     #[test]
     fn test_get_data_ref() {
-        let storage = Storage::load_or_init::<User>("data/test19").unwrap();
+        let storage = Storage::load_or_init::<User>("data/test192").unwrap();
         for _ in 0..1000 {
             let u = User::new(
                 &build_string(50),
