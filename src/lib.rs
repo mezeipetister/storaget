@@ -29,8 +29,9 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 pub trait StorageObject: Serialize + Clone {
+    type ResultType;
     fn get_id(&self) -> &str;
-    // fn load(&mut self, data: &str) -> StorageResult<()>;
+    fn try_from(from: &str) -> StorageResult<Self::ResultType>;
 }
 
 pub struct Storage<T> {
@@ -41,7 +42,7 @@ pub struct Storage<T> {
 
 impl<T> Storage<T>
 where
-    T: StorageObject,
+    T: StorageObject<ResultType = T>,
 {
     pub(crate) fn new(path: &'static str) -> Self {
         Storage {
@@ -50,6 +51,9 @@ where
             path,
         }
     }
+    /**
+     * Load storage objects from path or create path if it does not exist
+     */
     pub fn load_or_init<U>(path: &'static str) -> StorageResult<Self>
     where
         for<'de> T: Deserialize<'de>,
@@ -61,14 +65,17 @@ where
             return Err(Error::InternalError("ID is empty".to_owned()));
         }
         if self.get_by_id(object.get_id()).is_ok() {
-            return Err(Error::InternalError("ID has already exist".to_owned()));
+            return Err(Error::InternalError(
+                "ID has already exist".to_owned(),
+            ));
         }
         let mut data = self.data.lock().unwrap();
         self.lookup_table
             .lock()
             .unwrap()
             .insert(object.get_id().to_owned(), data.len());
-        save_storage_object(&object, self.path)?; // TODO: Maybe this line should be the last part?
+        // TODO: Maybe this line should be the last part?
+        save_storage_object(&object, self.path)?;
         data.push(Arc::new(Mutex::new(object)));
         Ok(())
     }
@@ -82,8 +89,12 @@ where
             None => Err(Error::ObjectNotFound),
         }
     }
-    pub fn get_by_ids(&self, ids: &[&str]) -> Vec<(String, StorageResult<DataObject<T>>)> {
-        let mut result: Vec<(String, StorageResult<DataObject<T>>)> = Vec::new();
+    pub fn get_by_ids(
+        &self,
+        ids: &[&str],
+    ) -> Vec<(String, StorageResult<DataObject<T>>)> {
+        let mut result: Vec<(String, StorageResult<DataObject<T>>)> =
+            Vec::new();
         for id in ids {
             let id = id.trim();
             result.push(((*id).into(), self.get_by_id(id)));
@@ -109,7 +120,7 @@ where
 
 impl<T> IntoIterator for &Storage<T>
 where
-    T: StorageObject,
+    T: StorageObject<ResultType = T>,
 {
     type Item = DataObject<T>;
     type IntoIter = DataIter<T>;
@@ -199,12 +210,33 @@ mod tests {
     use super::*;
     use rand::prelude::*;
     use test::Bencher;
+
+    // Dummy struct for tests.
+    #[derive(Serialize, Deserialize, Clone)]
+    pub struct User0 {
+        old_id: String,
+        old_name: String,
+        old_age: i32,
+    }
     // Dummy struct for tests.
     #[derive(Serialize, Deserialize, Clone)]
     pub struct User {
         id: String,
         name: String,
         age: i32,
+    }
+
+    impl StorageObject for User0 {
+        type ResultType = User0;
+        fn get_id(&self) -> &str {
+            &self.old_id
+        }
+        fn try_from(from: &str) -> StorageResult<Self::ResultType> {
+            match deserialize_object(from) {
+                Ok(res) => Ok(res),
+                Err(_) => Err(Error::DeserializeError("Ooo".to_string())),
+            }
+        }
     }
 
     impl User {
@@ -224,18 +256,36 @@ mod tests {
     }
 
     impl StorageObject for User {
+        type ResultType = User;
         fn get_id(&self) -> &str {
             &self.id
         }
+        fn try_from(from: &str) -> StorageResult<Self::ResultType> {
+            match deserialize_object(from) {
+                Ok(res) => Ok(res),
+                Err(_) => Ok(User0::try_from(from)?.into()),
+            }
+        }
     }
+
+    impl From<User0> for User {
+        fn from(from: User0) -> Self {
+            User {
+                id: from.old_id,
+                name: from.old_name,
+                age: from.old_age,
+            }
+        }
+    }
+
     // Generate random string with a given lenght.
     // Using english alphabet + integers + a few other basic characters.
     fn build_string(length: i32) -> String {
         let mut string = "".to_owned();
         let chars = [
-            'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q',
-            'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7',
-            '8', '9', '_',
+            'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '_',
         ];
         for _ in 0..length {
             string.push(
@@ -245,6 +295,25 @@ mod tests {
             );
         }
         string
+    }
+    #[test]
+    fn test_try_from() {
+        let old_storage =
+            Storage::load_or_init::<User0>("data/testasd").unwrap();
+        let user = User0 {
+            old_id: "1".to_string(),
+            old_name: "Demo".to_string(),
+            old_age: 31,
+        };
+        old_storage.add_to_storage(user).unwrap();
+        let new_storage: Storage<User> =
+            Storage::load_or_init::<User>("data/testasd").unwrap();
+        let user_name = match new_storage.get_by_id("1") {
+            Ok(res) => res.get(|u| u.get_name().to_string()),
+            Err(_) => "none".to_string(),
+        };
+        assert_eq!(user_name, "Demo");
+        // new_storage.remove().unwrap();
     }
     #[test]
     fn test_storage_iter() {
@@ -377,7 +446,8 @@ mod tests {
             storage.add_to_storage(u).unwrap();
         }
         b.iter(|| {
-            let result = storage.into_iter().fold(0, |sum, u| sum + u.get(|u| u.age));
+            let result =
+                storage.into_iter().fold(0, |sum, u| sum + u.get(|u| u.age));
             println!("{}", result);
         });
         storage.remove().unwrap();
@@ -416,7 +486,8 @@ mod tests {
             );
             storage.add_to_storage(u).unwrap();
         }
-        let result = storage.into_iter().fold(0, |sum, u| sum + u.get(|u| u.age));
+        let result =
+            storage.into_iter().fold(0, |sum, u| sum + u.get(|u| u.age));
         assert_eq!(result > 1000, true);
         storage.remove().unwrap();
     }

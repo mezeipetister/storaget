@@ -47,7 +47,8 @@ use std::path::Path;
 /// ```
 pub fn load_storage<'a, T>(path: &'static str) -> StorageResult<Storage<T>>
 where
-    for<'de> T: Deserialize<'de> + 'a + StorageObject + Serialize,
+    for<'de> T:
+        Deserialize<'de> + 'a + StorageObject<ResultType = T> + Serialize,
 {
     manage_path(path)?;
     let storage: Storage<T> = Storage::new(path);
@@ -80,7 +81,7 @@ pub(crate) fn remove_path(path: &'static str) -> StorageResult<()> {
 
 fn load<'a, T>(path: &'static str) -> StorageResult<Vec<T>>
 where
-    for<'de> T: Deserialize<'de> + 'a,
+    for<'de> T: Deserialize<'de> + 'a + StorageObject<ResultType = T>,
 {
     let files_to_read = fs::read_dir(path)
         .expect("Error during reading folder..")
@@ -97,7 +98,8 @@ where
         let mut content_temp = String::new();
         File::open(Path::new(&format!("{}/{}", path, &file_name)))?
             .read_to_string(&mut content_temp)?;
-        st_temp.push(deserialize_object::<T>(&content_temp)?);
+        // st_temp.push(deserialize_object::<T>(&content_temp)?);
+        st_temp.push(T::try_from(&content_temp)?);
     }
     return Ok(st_temp);
 }
@@ -155,7 +157,10 @@ where
  * Save storage into object!
  * TODO: Doc comments + example code
  */
-pub fn save_storage_object<'a, T>(storage_object: &'a T, path: &'static str) -> StorageResult<()>
+pub fn save_storage_object<'a, T>(
+    storage_object: &'a T,
+    path: &'static str,
+) -> StorageResult<()>
 where
     T: StorageObject + Serialize,
 {
