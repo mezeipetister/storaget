@@ -51,12 +51,6 @@ pub enum PackError {
     /// Any kind of error that has no other
     /// more specific variant in Error::*
     InternalError(String),
-    /// Object not found in a storage.
-    /// Usually using with get_by_id()
-    ObjectNotFound,
-    /// Path not found
-    /// Using at reading data from path.
-    PathNotFound,
     /// Serialize Error
     /// error occured during serialiuation
     SerializeError(String),
@@ -66,42 +60,106 @@ pub enum PackError {
     /// IO Error
     /// error during file operations
     IOError(String),
+    /// Object not found in a storage.
+    /// Usually using with get_by_id()
+    ObjectNotFound,
+    /// Path not found
+    /// Using at reading data from path.
+    PathNotFound,
 }
 
 // Well formatted display text for users
-// TODO: Use error code and language translation for end-user error messages.
+// TODO: Use error code and language translation
+// for end-user error messages.
 impl fmt::Display for PackError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             PackError::InternalError(msg) => {
                 write!(f, "Internal error: {}", msg)
             }
+            PackError::SerializeError(msg) => {
+                write!(f, "Pack serialization error: {}", msg)
+            }
+            PackError::DeserializeError(msg) => {
+                write!(f, "Pack deserialization error: {}", msg)
+            }
+            PackError::IOError(msg) => write!(f, "Pack IO error: {}", msg),
+            PackError::PathNotFound => write!(f, "Path not found"),
             PackError::ObjectNotFound => {
                 write!(f, "Storage object not found in storage.")
             }
-            PackError::PathNotFound => write!(f, "Path not found"),
             _ => write!(f, "Unknown error"),
         }
     }
 }
 
-impl fmt::Debug for Error {
+// Well formatted debug text
+// TODO: how to support localitation?
+impl fmt::Debug for PackError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::InternalError(msg) => write!(f, "Internal error: {}", msg),
-            Error::ObjectNotFound => {
+            PackError::InternalError(msg) => {
+                write!(f, "Internal error: {}", msg)
+            }
+            PackError::SerializeError(msg) => {
+                write!(f, "Pack serialization error: {}", msg)
+            }
+            PackError::DeserializeError(msg) => {
+                write!(f, "Pack deserialization error: {}", msg)
+            }
+            PackError::IOError(msg) => write!(f, "Pack IO error: {}", msg),
+            PackError::PathNotFound => write!(f, "Path not found"),
+            PackError::ObjectNotFound => {
                 write!(f, "Storage object not found in storage.")
             }
-            Error::PathNotFound => write!(f, "Path not found"),
             _ => write!(f, "Unknown error"),
         }
     }
 }
 
-impl From<io::Error> for Error {
+impl From<io::Error> for PackError {
     fn from(err: io::Error) -> Self {
-        Error::IOError(format!("{}", err))
+        PackError::IOError(format!("{}", err))
     }
+}
+
+/// Pack<T>
+/// Small FS layer around type T
+/// Pack is responsible to sync T to the filesystem.
+pub struct Pack<T>
+where
+    T: Serialize,
+{
+    data: T,
+    path: &'static str,
+}
+
+/// PackGuard<'a, T>
+/// Small mutable guard around type T
+/// that implements Drop trait, and save T
+/// to the filesystem when PackGuard is dropped.
+///
+/// Implements deref, deref_mut and drop
+pub struct PackGuard<'a, T>
+where
+    T: Serialize,
+{
+    data: &'a mut T,
+    path: &'static str,
+}
+
+/// VecPack<T>
+/// Small FS layer around a Vec<Pack<T>>
+/// The naming could be confusing a bit, as VecPack<T>
+/// is rather FSLayer<Vec<Pack<T>>>, but maybe this could
+/// be too long and unnecessary. So VecPack<T> behaves as
+/// a special Vec<Pack<T>>.
+pub struct VecPack<T>
+where
+    T: Serialize,
+{
+    data: Vec<Pack<T>>,
+    path: &'static str,
 }
 
 pub trait StorageObject: Serialize + Clone {
