@@ -28,12 +28,13 @@
 extern crate rand;
 use serde::{Deserialize, Serialize};
 use std::convert::From;
+use std::default::Default;
 use std::fmt;
 use std::fs::File;
 use std::io;
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Read, Write};
 use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, Mutex};
+use std::path::Path;
 
 /// PackResult<T>
 ///
@@ -177,19 +178,46 @@ pub trait PackHasId<T>: Serialize {
     fn get_id(&self) -> &T;
 }
 
-impl<T> Pack<T>
+/// Save DATA OBJECT to its path
+/// Moved this logic into this separated private function
+/// as we use it from the Drop implementation and from save method.
+fn save_data_object<T>(path: &str, data: T) -> PackResult<()>
 where
-    T: Serialize + Sized + Clone,
+    T: Serialize,
 {
+    let mut buffer = BufWriter::new(File::create(&format!("{}.yml", &path))?);
+    buffer.write_all(serde_yaml::to_string(&data)?.as_bytes())?;
+    buffer.flush()?;
+    Ok(())
+}
+
+impl<'a, T> Pack<T>
+where
+    for<'de> T: Serialize + Deserialize<'de> + Default + Sized + Clone + 'a,
+{
+    /// Load Pack<T> from Path
+    /// If Path is file and exists, then it tries to load
+    /// then deserialize. Otherwise returns PackError.
+    pub fn load_from_path(path: &Path) -> PackResult<T> {
+        let mut file = File::open(path)?;
+        let mut buffer = String::new();
+        file.read_to_string(&mut buffer)?;
+        match serde_yaml::from_str(&buffer) {
+            Ok(t) => Ok(t),
+            Err(err) => Err(PackError::DeserializeError(err.to_string())),
+        }
+    }
+    pub fn load_or_init(path: &Path) -> PackResult<T> {
+        if !path.exists() {
+            std::fs::create_dir_all(&path)?;
+        }
+        Pack::load_from_path(&path)
+    }
     /// Save Pack<T> manually
     /// to FS. Returns PackError if something
     /// wrong occures.
     pub fn save(&self) -> PackResult<()> {
-        let mut buffer =
-            BufWriter::new(File::create(&format!("{}.yml", &self.path))?);
-        buffer.write_all(serde_yaml::to_string(&self.data)?.as_bytes())?;
-        buffer.flush()?;
-        Ok(())
+        save_data_object(&self.path, &self.data)
     }
     /// Update Pack<T>
     /// Tries to update T, if SUCCESS
@@ -281,7 +309,12 @@ where
     T: Serialize + Sized + Clone,
 {
     fn drop(&mut self) {
-        // TODO: Implement FS save!
-        println!("PackGuard has dropped!");
+        // TODO: VERY IMPORTANT
+        // Implement error LOGGING!
+        // This auto save during drop cannot return PackError,
+        // we have two options:
+        //  - Panic(),
+        //  - & | error log
+        let _ = save_data_object(&self.path, &self.data);
     }
 }
