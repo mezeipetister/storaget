@@ -30,6 +30,7 @@ use serde::{Deserialize, Serialize};
 use std::convert::From;
 use std::fmt;
 use std::io;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
 /// PackResult<T>
@@ -172,9 +173,17 @@ impl<T> Pack<T>
 where
     T: Serialize + Sized + Clone,
 {
+    /// Save Pack<T> manually
+    /// to FS. Returns PackError if something
+    /// wrong occures.
     pub fn save(&self) -> PackResult<()> {
         Ok(())
     }
+    /// Update Pack<T>
+    /// Tries to update T, if SUCCESS
+    /// then tries to save to FS, if SUCCESS
+    /// returns R. If Fail, then doing data T
+    /// rollback to backup, then return PackError.
     pub fn update<F, R>(&mut self, mut f: F) -> R
     where
         F: FnMut(&mut T) -> R,
@@ -196,6 +205,61 @@ where
                 err
             }
         }
+    }
+    /// Get(Fn) -> R
+    /// Access data through closure
+    /// Unmutable data access
+    pub fn get<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&T) -> R,
+    {
+        f(&self.data)
+    }
+    /// Map(Fn) -> R
+    /// Syntactic sugar for Get(Fn) -> R
+    pub fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&T) -> R,
+    {
+        f(&self.data)
+    }
+}
+
+impl<T> Deref for Pack<T>
+where
+    T: Serialize + Sized + Clone,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<'a, T> Deref for PackGuard<'a, T>
+where
+    T: Serialize + Sized + Clone,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<'a, T> DerefMut for PackGuard<'a, T>
+where
+    T: Serialize + Sized + Clone,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
+impl<'a, T> Drop for PackGuard<'a, T> {
+    fn drop(&mut self) {
+        // TODO: Implement FS save!
+        println!("PackGuard has dropped!");
     }
 }
 
