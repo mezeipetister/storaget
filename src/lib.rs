@@ -1,32 +1,108 @@
-// Copyright (C) 2019 Peter Mezei
+// The MIT License
+// Copyright 2020 Peter Mezei <mezeipetister@gmail.com>
 //
-// This file is part of Project A.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// Project A is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 2 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// Project A is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 //
-// You should have received a copy of the GNU General Public License
-// along with Project A.  If not, see <http://www.gnu.org/licenses/>.
+// Made with (L) from Hungary
+// If you need any help please contact me
+// at <mezeipetister@gmail.com>
 
 #![feature(test)]
 
 extern crate rand;
-extern crate test;
-pub mod prelude;
-pub use prelude::*;
-use std::sync::MutexGuard;
-pub mod file;
-pub use file::*;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::convert::From;
+use std::fmt;
+use std::io;
 use std::sync::{Arc, Mutex};
+
+/// PackResult<T>
+///
+/// Generic Pack result type
+/// contains Ok(T) or PackError
+///
+/// ```rust
+/// use crate::*;
+/// let res_ok: PackResult<i32> = Ok(32);
+/// let res_err: PackResult<i32> = Err(PackError::ObjectNotFound);
+/// ```
+pub type PackResult<T> = Result<T, PackError>;
+
+/// Pack Error type
+/// For internal use
+pub enum PackError {
+    /// Any error that has a custom message.
+    /// Any kind of error that has no other
+    /// more specific variant in Error::*
+    InternalError(String),
+    /// Object not found in a storage.
+    /// Usually using with get_by_id()
+    ObjectNotFound,
+    /// Path not found
+    /// Using at reading data from path.
+    PathNotFound,
+    /// Serialize Error
+    /// error occured during serialiuation
+    SerializeError(String),
+    /// Deserialize Error
+    /// error occured during deserialization
+    DeserializeError(String),
+    /// IO Error
+    /// error during file operations
+    IOError(String),
+}
+
+// Well formatted display text for users
+// TODO: Use error code and language translation for end-user error messages.
+impl fmt::Display for PackError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PackError::InternalError(msg) => {
+                write!(f, "Internal error: {}", msg)
+            }
+            PackError::ObjectNotFound => {
+                write!(f, "Storage object not found in storage.")
+            }
+            PackError::PathNotFound => write!(f, "Path not found"),
+            _ => write!(f, "Unknown error"),
+        }
+    }
+}
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::InternalError(msg) => write!(f, "Internal error: {}", msg),
+            Error::ObjectNotFound => {
+                write!(f, "Storage object not found in storage.")
+            }
+            Error::PathNotFound => write!(f, "Path not found"),
+            _ => write!(f, "Unknown error"),
+        }
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        Error::IOError(format!("{}", err))
+    }
+}
 
 pub trait StorageObject: Serialize + Clone {
     type ResultType;

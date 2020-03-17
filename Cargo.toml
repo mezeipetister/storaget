@@ -1,10 +1,10 @@
 [package]
 name = "storaget"
 description = "# Storage<T> file based in-memory database.\nStrongly MVP, big API changes are expected frequently.\nAs Storage<T> is rather experimental please do not use it for production."
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Peter Mezei <mezeipetister@gmail.com>"]
 edition = "2018"
-license = "GPL-2.0"
+license = "MIT"
 homepage = "https://github.com/mezeipetister/storaget"
 repository = "https://github.com/mezeipetister/storaget"
 
