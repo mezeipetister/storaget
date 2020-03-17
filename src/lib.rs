@@ -207,6 +207,9 @@ where
             Err(err) => Err(PackError::DeserializeError(err.to_string())),
         }
     }
+    /// Load or init Pack<T> from Path
+    /// If Path does not exist, then it tries to create;
+    /// Otherwise call Pack::load_from_path(Path).
     pub fn load_or_init(path: &Path) -> PackResult<T> {
         if !path.exists() {
             std::fs::create_dir_all(&path)?;
