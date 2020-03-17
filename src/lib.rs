@@ -128,7 +128,7 @@ impl From<io::Error> for PackError {
 /// Pack is responsible to sync T to the filesystem.
 pub struct Pack<T>
 where
-    T: Serialize,
+    T: Serialize + Sized + Clone,
 {
     data: T,
     path: &'static str,
@@ -142,7 +142,7 @@ where
 /// Implements deref, deref_mut and drop
 pub struct PackGuard<'a, T>
 where
-    T: Serialize,
+    T: Serialize + Sized + Clone,
 {
     data: &'a mut T,
     path: &'static str,
@@ -156,35 +156,53 @@ where
 /// a special Vec<Pack<T>>.
 pub struct VecPack<T>
 where
-    T: Serialize,
+    T: Serialize + Sized + Clone,
 {
     data: Vec<Pack<T>>,
     path: &'static str,
 }
 
-pub trait StorageObject: Serialize + Clone {
-    type ResultType;
-    fn get_id(&self) -> &str;
-    fn try_from(from: &str) -> StorageResult<Self::ResultType>;
+// TODO: Should we rename it?
+pub trait PackHasId<T>: Serialize {
+    type Result;
+    fn get_id(&self) -> &T;
 }
 
-pub struct Storage<T> {
-    data: Mutex<Vec<Arc<Mutex<T>>>>,
-    lookup_table: Mutex<BTreeMap<String, usize>>,
-    path: &'static str,
-}
-
-impl<T> Storage<T>
+impl<T> Pack<T>
 where
-    T: StorageObject<ResultType = T>,
+    T: Serialize + Sized + Clone,
 {
-    pub(crate) fn new(path: &'static str) -> Self {
-        Storage {
-            data: Mutex::new(Vec::new()),
-            lookup_table: Mutex::new(BTreeMap::new()),
-            path,
+    pub fn save(&self) -> PackResult<()> {
+        Ok(())
+    }
+    pub fn update<F, R>(&mut self, mut f: F) -> R
+    where
+        F: FnMut(&mut T) -> R,
+    {
+        // First clone data as a backup.
+        let backup = self.data.clone();
+        // Let's do the update process.
+        let res = f(&mut self.data);
+        // Try to save data to the FS
+        match self.save() {
+            // If success, then return the update result(s)
+            Ok(_) => res,
+            // If there is error occured during
+            // saveing updated data
+            Err(err) => {
+                // Then rollback data to the backup.
+                self.data = backup;
+                // Return error
+                err
+            }
         }
     }
+}
+
+impl<T> Pack<T>
+where
+    T: Serialize + Sized,
+{
     /**
      * Load storage objects from path or create path if it does not exist
      */
@@ -193,25 +211,6 @@ where
         for<'de> T: Deserialize<'de>,
     {
         Ok(load_storage(path)?)
-    }
-    pub fn add_to_storage(&self, object: T) -> StorageResult<()> {
-        if object.get_id().len() == 0 {
-            return Err(Error::InternalError("ID is empty".to_owned()));
-        }
-        if self.get_by_id(object.get_id()).is_ok() {
-            return Err(Error::InternalError(
-                "ID has already exist".to_owned(),
-            ));
-        }
-        let mut data = self.data.lock().unwrap();
-        self.lookup_table
-            .lock()
-            .unwrap()
-            .insert(object.get_id().to_owned(), data.len());
-        // TODO: Maybe this line should be the last part?
-        save_storage_object(&object, self.path)?;
-        data.push(Arc::new(Mutex::new(object)));
-        Ok(())
     }
     pub fn get_by_id(&self, id: &str) -> StorageResult<DataObject<T>> {
         let id = id.trim();
