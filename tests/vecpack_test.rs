@@ -81,12 +81,29 @@ fn test_vecpack_find_id() {
 }
 
 #[test]
-fn test_vecpack_find_id_mut() {
-    let mut cars =
-        create_dummy_vecpack(PathBuf::from("data/vecpack_test_find_id_mut"));
+fn test_vecpack_find_id_mut_update() {
+    let mut cars = create_dummy_vecpack(PathBuf::from(
+        "data/vecpack_test_find_id_mut_update",
+    ));
     cars.find_id_mut(1).unwrap().update(|i| i.hp = 1).unwrap();
     cars.find_id_mut(2).unwrap().update(|i| i.hp = 11).unwrap();
     cars.find_id_mut(3).unwrap().update(|i| i.hp = 111).unwrap();
+
+    assert_eq!(cars.find_id(1).unwrap().hp, 1);
+    assert_eq!(cars.find_id(2).unwrap().hp, 11);
+    assert_eq!(cars.find_id(3).unwrap().hp, 111);
+}
+
+#[test]
+fn test_vecpack_find_id_mut_as_mut() {
+    let mut cars = create_dummy_vecpack(PathBuf::from(
+        "data/vecpack_test_find_id_mut_as_mut",
+    ));
+    cars.find_id_mut(1).unwrap().as_mut().hp = 1;
+    cars.find_id_mut(2).unwrap().as_mut().hp = 11;
+    cars.find_id_mut(3).unwrap().as_mut().hp = 111;
+    assert_eq!(cars.find_id_mut(4).is_ok(), false);
+    assert_eq!(cars.find_id_mut(100).is_ok(), false);
 
     assert_eq!(cars.find_id(1).unwrap().hp, 1);
     assert_eq!(cars.find_id(2).unwrap().hp, 11);
