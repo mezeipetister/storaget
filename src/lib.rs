@@ -349,20 +349,52 @@ where
     for<'de> T: VecPackMember + Deserialize<'de> + Default,
 {
     // TODO: Check FS operations. What if path is a file?
+    /// New VecPack<T>
+    /// Requires a PathBuf and returns an empty VecPack<T>
     pub fn new(path: PathBuf) -> PackResult<VecPack<T>> {
+        // Check whether path is a dir, or a file
+        // If file, then panic!
+        if path.is_file() {
+            panic!(
+                "Given VecPack path is not a dir. Path: {}",
+                &path.to_str().unwrap()
+            );
+        }
+        // If path does not exist,
+        // then create it!
         if !path.exists() {
             std::fs::create_dir_all(&path)?;
         }
+        // Create an empty VecPack<T>
         Ok(VecPack {
             data: Vec::new(),
             path,
         })
     }
+    /// Load or init VecPack by a given Path
+    /// If path does not exist,
+    /// then we create it, then loads all the files,
+    /// and tries to deserialize them.
+    /// If a file cannot be read, or cannot be deserialized
+    /// then we panic!
     pub fn load_or_init(path: PathBuf) -> PackResult<VecPack<T>> {
+        // If path is a file
+        // then panic!
+        if path.is_file() {
+            panic!(
+                "Given VecPack path is not a dir. Path: {}",
+                &path.to_str().unwrap()
+            );
+        }
+        // If path does not exist,
+        // then we create it.
         if !path.exists() {
             std::fs::create_dir_all(&path)?;
         }
+        // Result empty VecPack<T>
         let mut result: VecPack<T> = VecPack::new(path.clone())?;
+        // First collect all
+        // the file names from path
         std::fs::read_dir(path.clone())?
             .filter_map(|file| {
                 file.ok().and_then(|e| {
@@ -376,10 +408,15 @@ where
                 })
             })
             .collect::<Vec<PathBuf>>()
+            // Then iter over path vector
+            // and try to read and deserialize
+            // them.
             .iter()
             .for_each(|path| {
+                // Add deserialized T to VecPack<T>
                 result
                     .insert_pack(
+                        // Create Pack<T> from T
                         Pack::<T>::load_from_path(path.clone()).expect(
                             &format!(
                                 "Cannot deserialize file with ID: {}",
@@ -394,7 +431,10 @@ where
             });
         Ok(result)
     }
+    /// Insert a new T to VecPack<T>
+    /// Only if ID is not taken
     pub fn insert(&mut self, item: T) -> PackResult<()> {
+        // Check if ID whether available
         if !&self.check_id_available(item.get_id()) {
             return Err(PackError::IDTaken);
         }
@@ -409,6 +449,8 @@ where
         self.data.push(p);
         Ok(())
     }
+    /// Insert Pack<T> to VecPack<T>
+    /// Only if ID is not taken
     pub fn insert_pack(&mut self, item: Pack<T>) -> PackResult<()> {
         if !&self.check_id_available(item.get_id()) {
             return Err(PackError::IDTaken);
@@ -416,30 +458,43 @@ where
         self.data.push(item);
         Ok(())
     }
+    /// Find ID and returns &Pack<T>
+    /// as an unmutable reference
     pub fn find_id(&self, id: T::Target) -> PackResult<&Pack<T>> {
         match self.iter().position(|i| i.get_id() == id) {
             Some(p) => Ok(&self.get(p).unwrap()),
             None => Err(PackError::ObjectNotFound),
         }
     }
+    /// Find ID and returns &mut Pack<T>
+    /// as a mutable reference
     pub fn find_id_mut(&mut self, id: T::Target) -> PackResult<&mut Pack<T>> {
         match &mut self.into_iter().position(|i| i.get_id() == id) {
             Some(p) => Ok(self.as_vec_mut().get_mut(*p).unwrap()),
             None => Err(PackError::ObjectNotFound),
         }
     }
+    /// Check ID is available
+    /// If ID is taken, returns false,
+    /// otherwise returns true
     pub fn check_id_available(&self, id: T::Target) -> bool {
         match self.iter().position(|i| i.get_id() == id) {
             Some(_) => false,
             None => true,
         }
     }
+    /// Returns data as a mutable
+    /// reference to Vec<Pack<T>>
     pub fn as_vec_mut(&mut self) -> &mut Vec<Pack<T>> {
         &mut self.data
     }
+    /// Returns data as unmutable
+    /// reference to Vec<Pack<T>>
     pub fn as_vec(&self) -> &Vec<Pack<T>> {
         &self.data
     }
+    /// Returns VecPack<T>
+    /// &Path
     pub fn get_path(&self) -> &Path {
         &self.path.as_path()
     }
