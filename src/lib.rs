@@ -218,11 +218,14 @@ where
     /// Load or init Pack<T> from Path
     /// If Path does not exist, then it tries to create;
     /// Otherwise call Pack::load_from_path(Path).
-    pub fn load_or_init(mut path: PathBuf, id: &str) -> PackResult<Pack<T>> {
+    pub fn load_or_init(
+        mut path: PathBuf,
+        file_id: &str,
+    ) -> PackResult<Pack<T>> {
         if !path.exists() {
             std::fs::create_dir_all(&path)?;
         }
-        path.push(&format!("{}.yml", id));
+        path.push(&format!("{}.yml", file_id));
         if !path.exists() {
             Pack::<T>::new(path.clone())?.save()?;
         }

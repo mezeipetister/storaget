@@ -90,3 +90,51 @@ fn test_struct() {
     };
     assert_eq!(*(meaning_of_life).fuel, "electric".to_string());
 }
+
+#[test]
+fn test_get() {
+    let mut meaning_of_life: Pack<i32> = Pack::load_or_init(
+        PathBuf::from("data/pack_test"),
+        "meaning_of_life_get",
+    )
+    .unwrap();
+    *(meaning_of_life.as_mut()) = 42;
+    assert_eq!(meaning_of_life.get(|i| i.clone()), 42);
+}
+
+#[test]
+fn test_map() {
+    let mut meaning_of_life: Pack<i32> = Pack::load_or_init(
+        PathBuf::from("data/pack_test"),
+        "meaning_of_life_map",
+    )
+    .unwrap();
+    *(meaning_of_life.as_mut()) = 42;
+    assert_eq!(meaning_of_life.map(|i| i * 2), 84);
+}
+
+#[test]
+fn test_update_iter_1000() {
+    let mut meaning_of_life: Pack<i32> = Pack::load_or_init(
+        PathBuf::from("data/pack_test"),
+        "meaning_of_life_update_iter_1000",
+    )
+    .unwrap();
+    for _ in 0..1000 {
+        *(meaning_of_life.as_mut()) += 1;
+    }
+    assert_eq!(meaning_of_life.get(|i| i.clone()), 1000);
+}
+
+#[test]
+fn test_update_iter_10000() {
+    let mut meaning_of_life: Pack<i32> = Pack::load_or_init(
+        PathBuf::from("data/pack_test"),
+        "meaning_of_life_update_iter_10000",
+    )
+    .unwrap();
+    for _ in 0..10000 {
+        *(meaning_of_life.as_mut()) += 1;
+    }
+    assert_eq!(meaning_of_life.get(|i| i.clone()), 10000);
+}
