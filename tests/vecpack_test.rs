@@ -68,15 +68,11 @@ fn test_vecpack_as_mut() {
     let mut cars =
         create_dummy_vecpack(PathBuf::from("data/vecpack_test_as_mut"));
     cars.into_iter().for_each(|i| i.as_mut().hp = 1);
-    drop(cars);
-    let cars = create_dummy_vecpack(PathBuf::from("data/vecpack_test_as_mut"));
     assert_eq!(cars.get(0).unwrap().hp, 1);
 }
 
 #[test]
 fn test_vecpack_find_id() {
-    let cars = create_dummy_vecpack(PathBuf::from("data/vecpack_test_find_id"));
-    drop(cars);
     let cars = create_dummy_vecpack(PathBuf::from("data/vecpack_test_find_id"));
     assert_eq!(cars.find_id(3).is_ok(), true);
     assert_eq!(cars.find_id(1).unwrap().hp, 150);
@@ -91,10 +87,6 @@ fn test_vecpack_find_id_mut() {
     cars.find_id_mut(1).unwrap().update(|i| i.hp = 1).unwrap();
     cars.find_id_mut(2).unwrap().update(|i| i.hp = 11).unwrap();
     cars.find_id_mut(3).unwrap().update(|i| i.hp = 111).unwrap();
-
-    drop(cars);
-    let cars =
-        create_dummy_vecpack(PathBuf::from("data/vecpack_test_find_id_mut"));
 
     assert_eq!(cars.find_id(1).unwrap().hp, 1);
     assert_eq!(cars.find_id(2).unwrap().hp, 11);

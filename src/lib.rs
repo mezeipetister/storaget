@@ -71,6 +71,9 @@ pub enum PackError {
     /// Path not found
     /// Using at reading data from path.
     PathNotFound,
+    /// ID Taken
+    /// When VecPack ID not available
+    IDTaken,
 }
 
 // serde_yaml::Error to PackError
@@ -101,6 +104,7 @@ impl fmt::Display for PackError {
             PackError::ObjectNotFound => {
                 write!(f, "Storage object not found in storage.")
             }
+            PackError::IDTaken => write!(f, "VecPack ID already taken"),
         }
     }
 }
@@ -124,6 +128,7 @@ impl fmt::Debug for PackError {
             PackError::ObjectNotFound => {
                 write!(f, "Storage object not found in storage.")
             }
+            PackError::IDTaken => write!(f, "VecPack ID already taken"),
         }
     }
 }
@@ -390,6 +395,9 @@ where
         Ok(result)
     }
     pub fn insert(&mut self, item: T) -> PackResult<()> {
+        if !&self.check_id_available(item.get_id()) {
+            return Err(PackError::IDTaken);
+        }
         // TODO: Move file name creation to a central place!
         let mut p = (&self.path).clone();
         p.push(&format!("{}.yml", item.get_id()));
@@ -402,6 +410,9 @@ where
         Ok(())
     }
     pub fn insert_pack(&mut self, item: Pack<T>) -> PackResult<()> {
+        if !&self.check_id_available(item.get_id()) {
+            return Err(PackError::IDTaken);
+        }
         self.data.push(item);
         Ok(())
     }
@@ -415,6 +426,12 @@ where
         match &mut self.into_iter().position(|i| i.get_id() == id) {
             Some(p) => Ok(self.as_vec_mut().get_mut(*p).unwrap()),
             None => Err(PackError::ObjectNotFound),
+        }
+    }
+    pub fn check_id_available(&self, id: T::Target) -> bool {
+        match self.iter().position(|i| i.get_id() == id) {
+            Some(_) => false,
+            None => true,
         }
     }
     pub fn as_vec_mut(&mut self) -> &mut Vec<Pack<T>> {
