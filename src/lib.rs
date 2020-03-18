@@ -25,7 +25,6 @@
 
 #![feature(test)]
 
-extern crate rand;
 use serde::{Deserialize, Serialize};
 use std::convert::From;
 use std::default::Default;
