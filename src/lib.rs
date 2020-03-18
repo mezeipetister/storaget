@@ -35,7 +35,7 @@ use std::io;
 use std::io::{BufWriter, Read, Write};
 use std::iter::IntoIterator;
 use std::ops::{Deref, DerefMut};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// PackResult<T>
 ///
@@ -176,7 +176,7 @@ where
 /// This trait defines the requirements
 /// to be a member of a VecPack<T>
 pub trait VecPackMember: Serialize + Sized + Clone {
-    type Target: fmt::Display;
+    type Target: fmt::Display + std::cmp::PartialEq;
     fn get_id(&self) -> Self::Target;
 }
 
@@ -404,6 +404,27 @@ where
     pub fn insert_pack(&mut self, item: Pack<T>) -> PackResult<()> {
         self.data.push(item);
         Ok(())
+    }
+    pub fn get_by_id(&self, id: T::Target) -> PackResult<&Pack<T>> {
+        match self.iter().position(|i| i.get_id() == id) {
+            Some(p) => Ok(&self.get(p).unwrap()),
+            None => Err(PackError::ObjectNotFound),
+        }
+    }
+    pub fn get_mut_by_id(&mut self, id: T::Target) -> PackResult<&mut Pack<T>> {
+        match &mut self.into_iter().position(|i| i.get_id() == id) {
+            Some(p) => Ok(self.as_vec_mut().get_mut(*p).unwrap()),
+            None => Err(PackError::ObjectNotFound),
+        }
+    }
+    pub fn as_vec_mut(&mut self) -> &mut Vec<Pack<T>> {
+        &mut self.data
+    }
+    pub fn as_vec(&self) -> &Vec<Pack<T>> {
+        &self.data
+    }
+    pub fn get_path(&self) -> &Path {
+        &self.path.as_path()
     }
 }
 
