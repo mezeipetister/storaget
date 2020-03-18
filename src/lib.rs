@@ -224,8 +224,7 @@ where
         }
         path.push(&format!("{}.yml", id));
         if !path.exists() {
-            let p: Pack<T> = Pack::new(path.clone())?;
-            p.save()?;
+            Pack::<T>::new(path.clone())?.save()?;
         }
         Pack::load_from_path(path)
     }
