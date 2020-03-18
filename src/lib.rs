@@ -33,6 +33,7 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Read, Write};
+use std::iter::IntoIterator;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 
@@ -335,4 +336,96 @@ where
         //  - & | error log
         let _ = save_data_object(&self.path, &self.data);
     }
+}
+
+impl<'a, T> VecPack<T>
+where
+    T: Serialize + Sized + Clone,
+{
+    pub fn as_mut_vec(&'a mut self) -> &'a mut Vec<Pack<T>> {
+        &mut self.data
+    }
+}
+
+// impl<'a, T> VecPack<T> where T: Serialize + Sized + Clone
+
+impl<T> Deref for VecPack<T>
+where
+    T: Serialize + Sized + Clone,
+{
+    type Target = Vec<Pack<T>>;
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+// impl<T> DerefMut for VecPack<T>
+// where
+//     T: Serialize + Sized + Clone,
+// {
+//     fn deref_mut(&mut self) -> &mut Self::Target {
+//         &mut self.data
+//     }
+// }
+
+pub struct VecPackIterMut<'a, T>
+where
+    T: Serialize + Sized + Clone + 'a,
+{
+    data: &'a mut [Pack<T>],
+}
+
+impl<'a, T> Iterator for VecPackIterMut<'a, T>
+where
+    T: Serialize + Sized + Clone + 'a,
+{
+    type Item = &'a mut Pack<T>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let slice = std::mem::replace(&mut self.data, &mut []);
+        match slice.split_first_mut() {
+            Some((head, tail)) => {
+                self.data = tail;
+                Some(head)
+            }
+            None => None,
+        }
+    }
+}
+
+// Implement IntoIter for VecPack<T>
+// TODO: Maybe too dangerous!
+// TODO: Remove this implementation?
+impl<T> IntoIterator for VecPack<T>
+where
+    T: Serialize + Sized + Clone,
+{
+    type Item = Pack<T>;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.into_iter()
+    }
+}
+
+// Implement IntoIter for &'a mut VecPack<T>
+impl<'a, T> IntoIterator for &'a mut VecPack<T>
+where
+    T: Serialize + Sized + Clone,
+{
+    type Item = &'a mut Pack<T>;
+    type IntoIter = VecPackIterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        VecPackIterMut {
+            data: &mut self.data,
+        }
+    }
+}
+
+fn demo(a: &mut VecPack<u32>) {
+    let b = a
+        .into_iter()
+        .map(|i| (*i).clone() * 2)
+        .collect::<Vec<u32>>();
+    println!("{:?}", b);
 }
