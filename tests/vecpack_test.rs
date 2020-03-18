@@ -15,19 +15,35 @@ impl Car {
     }
 }
 
-impl<I> VecPackMember<I> for Car
-where
-    I: std::fmt::Display,
-{
-    fn get_id(&self) -> usize {
-        self.0
+impl VecPackMember for Car {
+    type Target = usize;
+    fn get_id(&self) -> Self::Target {
+        self.id
     }
 }
 
 #[test]
-fn test_load_or_init() {
+fn test_vecpack_load_or_init() {
     let meaning_of_life: PackResult<VecPack<Car>> =
-        VecPack::load_or_init(PathBuf::from("data/vecpack_test"));
+        VecPack::load_or_init(PathBuf::from("data/vecpack_test_load_or_init"));
     assert_eq!(meaning_of_life.is_ok(), true);
-    assert_eq!(meaning_of_life.unwrap().len(), 0);
+    assert_eq!((*meaning_of_life.unwrap()).len(), 0);
+}
+
+#[test]
+fn test_vecpack_insert() {
+    let mut meaning_of_life: VecPack<Car> =
+        VecPack::load_or_init(PathBuf::from("data/vecpack_test_insert"))
+            .unwrap();
+    meaning_of_life
+        .insert(Car::new(1, "CarSmall".to_string(), 150))
+        .unwrap();
+    meaning_of_life
+        .insert(Car::new(2, "CarBig".to_string(), 650))
+        .unwrap();
+    meaning_of_life
+        .insert(Car::new(3, "CarMedium".to_string(), 250))
+        .unwrap();
+
+    assert_eq!((*meaning_of_life).len(), 3);
 }

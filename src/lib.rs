@@ -43,7 +43,7 @@ use std::path::PathBuf;
 /// contains Ok(T) or PackError
 ///
 /// ```rust
-/// use crate::*;
+/// use storaget::*;
 /// let res_ok: PackResult<i32> = Ok(32);
 /// let res_err: PackResult<i32> = Err(PackError::ObjectNotFound);
 /// ```
@@ -167,7 +167,7 @@ where
 /// a special Vec<Pack<T>>.
 pub struct VecPack<T>
 where
-    T: VecPackMember<T> + fmt::Display,
+    T: VecPackMember,
 {
     data: Vec<Pack<T>>,
     path: PathBuf,
@@ -175,11 +175,9 @@ where
 
 /// This trait defines the requirements
 /// to be a member of a VecPack<T>
-pub trait VecPackMember<I>: Serialize + Sized + Clone
-where
-    I: fmt::Display,
-{
-    fn get_id(&self) -> I;
+pub trait VecPackMember: Serialize + Sized + Clone {
+    type Target: fmt::Display;
+    fn get_id(&self) -> Self::Target;
 }
 
 /// Save DATA OBJECT to its path
@@ -343,7 +341,7 @@ where
 
 impl<T> VecPack<T>
 where
-    for<'de> T: VecPackMember<T> + Deserialize<'de> + Default + fmt::Display,
+    for<'de> T: VecPackMember + Deserialize<'de> + Default,
 {
     // TODO: Check FS operations. What if path is a file?
     pub fn new(path: PathBuf) -> PackResult<VecPack<T>> {
@@ -413,7 +411,7 @@ where
 // It returns an unmutable reference to &Vec<Pack<T>>
 impl<T> Deref for VecPack<T>
 where
-    T: VecPackMember<T> + fmt::Display,
+    T: VecPackMember,
 {
     type Target = Vec<Pack<T>>;
     fn deref(&self) -> &Self::Target {
@@ -472,7 +470,7 @@ where
 // Implement IntoIter for &'a mut VecPack<T>
 impl<'a, T> IntoIterator for &'a mut VecPack<T>
 where
-    T: VecPackMember<T> + fmt::Display,
+    T: VecPackMember,
 {
     type Item = &'a mut Pack<T>;
     type IntoIter = VecPackIterMut<'a, T>;

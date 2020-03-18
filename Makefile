@@ -1,4 +1,4 @@
- 
+
 .PHONY: release, test
 
 release:
@@ -9,4 +9,7 @@ build:
 	cargo build
 
 test:
+	rm -rf ./data
 	cargo test
+	rm -rf ./data
+	mkdir data
