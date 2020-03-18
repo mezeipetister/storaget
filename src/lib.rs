@@ -34,7 +34,7 @@ use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Read, Write};
 use std::ops::{Deref, DerefMut};
-use std::path::Path;
+use std::path::PathBuf;
 
 /// PackResult<T>
 ///
@@ -141,7 +141,7 @@ where
     T: Serialize + Sized + Clone,
 {
     data: T,
-    path: &'static str,
+    path: PathBuf,
 }
 
 /// PackGuard<'a, T>
@@ -155,7 +155,7 @@ where
     T: Serialize + Sized + Clone,
 {
     data: &'a mut T,
-    path: &'static str,
+    path: &'a PathBuf,
 }
 
 /// VecPack<T>
@@ -169,7 +169,7 @@ where
     T: Serialize + Sized + Clone,
 {
     data: Vec<Pack<T>>,
-    path: &'static str,
+    path: PathBuf,
 }
 
 // TODO: Should we rename it?
@@ -181,11 +181,11 @@ pub trait PackHasId<T>: Serialize {
 /// Save DATA OBJECT to its path
 /// Moved this logic into this separated private function
 /// as we use it from the Drop implementation and from save method.
-fn save_data_object<T>(path: &str, data: T) -> PackResult<()>
+fn save_data_object<T>(path: &PathBuf, data: T) -> PackResult<()>
 where
     T: Serialize,
 {
-    let mut buffer = BufWriter::new(File::create(&format!("{}.yml", &path))?);
+    let mut buffer = BufWriter::new(File::create(path)?);
     buffer.write_all(serde_yaml::to_string(&data)?.as_bytes())?;
     buffer.flush()?;
     Ok(())
@@ -195,26 +195,39 @@ impl<'a, T> Pack<T>
 where
     for<'de> T: Serialize + Deserialize<'de> + Default + Sized + Clone + 'a,
 {
+    // New Pack<T>
+    // Private function
+    fn new(path: PathBuf) -> PackResult<Self> {
+        Ok(Pack {
+            data: T::default(),
+            path,
+        })
+    }
     /// Load Pack<T> from Path
     /// If Path is file and exists, then it tries to load
     /// then deserialize. Otherwise returns PackError.
-    pub fn load_from_path(path: &Path) -> PackResult<T> {
-        let mut file = File::open(path)?;
+    pub fn load_from_path(path: PathBuf) -> PackResult<Pack<T>> {
+        let mut file = File::open(&path)?;
         let mut buffer = String::new();
         file.read_to_string(&mut buffer)?;
-        match serde_yaml::from_str(&buffer) {
-            Ok(t) => Ok(t),
+        match serde_yaml::from_str::<T>(&buffer) {
+            Ok(t) => Ok(Pack { data: t, path }),
             Err(err) => Err(PackError::DeserializeError(err.to_string())),
         }
     }
     /// Load or init Pack<T> from Path
     /// If Path does not exist, then it tries to create;
     /// Otherwise call Pack::load_from_path(Path).
-    pub fn load_or_init(path: &Path) -> PackResult<T> {
+    pub fn load_or_init(mut path: PathBuf, id: &str) -> PackResult<Pack<T>> {
         if !path.exists() {
             std::fs::create_dir_all(&path)?;
         }
-        Pack::load_from_path(&path)
+        path.push(&format!("{}.yml", id));
+        if !path.exists() {
+            let p: Pack<T> = Pack::new(path.clone())?;
+            p.save()?;
+        }
+        Pack::load_from_path(path)
     }
     /// Save Pack<T> manually
     /// to FS. Returns PackError if something
