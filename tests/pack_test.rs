@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use storaget::*;
 
@@ -41,9 +42,11 @@ fn test_as_deref() {
     )
     .unwrap();
     *(meaning_of_life.as_mut()) = 42;
+
     // Manually drop
     // meaning_of_life variable
     drop(meaning_of_life);
+
     // Init it again
     // and read the stored value
     let meaning_of_life: Pack<i32> = Pack::load_or_init(
@@ -51,5 +54,39 @@ fn test_as_deref() {
         "meaning_of_life_deref",
     )
     .unwrap();
+
     assert_eq!(*(meaning_of_life), 42);
+}
+
+#[test]
+fn test_vector() {
+    let mut meaning_of_life: Pack<Vec<i32>> = Pack::load_or_init(
+        PathBuf::from("data/pack_test"),
+        "meaning_of_life_vec",
+    )
+    .unwrap();
+    (meaning_of_life.as_mut()).push(1);
+    (meaning_of_life.as_mut()).push(2);
+    (meaning_of_life.as_mut()).push(3);
+    assert_eq!(*(meaning_of_life), vec![1, 2, 3]);
+}
+
+#[test]
+fn test_struct() {
+    #[derive(Serialize, Deserialize, Clone, Default)]
+    struct Car {
+        fuel: String,
+        number_of_seats: u32,
+    }
+
+    let mut meaning_of_life: Pack<Car> = Pack::load_or_init(
+        PathBuf::from("data/pack_test"),
+        "meaning_of_life_struct",
+    )
+    .unwrap();
+    *(meaning_of_life.as_mut()) = Car {
+        fuel: "electric".to_string(),
+        number_of_seats: 6,
+    };
+    assert_eq!(*(meaning_of_life).fuel, "electric".to_string());
 }
