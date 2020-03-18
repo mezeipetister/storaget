@@ -405,13 +405,13 @@ where
         self.data.push(item);
         Ok(())
     }
-    pub fn get_by_id(&self, id: T::Target) -> PackResult<&Pack<T>> {
+    pub fn find_id(&self, id: T::Target) -> PackResult<&Pack<T>> {
         match self.iter().position(|i| i.get_id() == id) {
             Some(p) => Ok(&self.get(p).unwrap()),
             None => Err(PackError::ObjectNotFound),
         }
     }
-    pub fn get_mut_by_id(&mut self, id: T::Target) -> PackResult<&mut Pack<T>> {
+    pub fn find_id_mut(&mut self, id: T::Target) -> PackResult<&mut Pack<T>> {
         match &mut self.into_iter().position(|i| i.get_id() == id) {
             Some(p) => Ok(self.as_vec_mut().get_mut(*p).unwrap()),
             None => Err(PackError::ObjectNotFound),

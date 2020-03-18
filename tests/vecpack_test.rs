@@ -74,37 +74,29 @@ fn test_vecpack_as_mut() {
 }
 
 #[test]
-fn test_vecpack_get_by_id() {
-    let cars =
-        create_dummy_vecpack(PathBuf::from("data/vecpack_test_get_by_id"));
+fn test_vecpack_find_id() {
+    let cars = create_dummy_vecpack(PathBuf::from("data/vecpack_test_find_id"));
     drop(cars);
-    let cars =
-        create_dummy_vecpack(PathBuf::from("data/vecpack_test_get_by_id"));
-    assert_eq!(cars.get_by_id(3).is_ok(), true);
-    assert_eq!(cars.get_by_id(1).unwrap().hp, 150);
-    assert_eq!(cars.get_by_id(2).unwrap().hp, 650);
-    assert_eq!(cars.get_by_id(3).unwrap().hp, 250);
+    let cars = create_dummy_vecpack(PathBuf::from("data/vecpack_test_find_id"));
+    assert_eq!(cars.find_id(3).is_ok(), true);
+    assert_eq!(cars.find_id(1).unwrap().hp, 150);
+    assert_eq!(cars.find_id(2).unwrap().hp, 650);
+    assert_eq!(cars.find_id(3).unwrap().hp, 250);
 }
 
 #[test]
-fn test_vecpack_get_mut_by_id() {
+fn test_vecpack_find_id_mut() {
     let mut cars =
-        create_dummy_vecpack(PathBuf::from("data/vecpack_test_get_mut_by_id"));
-    cars.get_mut_by_id(1).unwrap().update(|i| i.hp = 1).unwrap();
-    cars.get_mut_by_id(2)
-        .unwrap()
-        .update(|i| i.hp = 11)
-        .unwrap();
-    cars.get_mut_by_id(3)
-        .unwrap()
-        .update(|i| i.hp = 111)
-        .unwrap();
+        create_dummy_vecpack(PathBuf::from("data/vecpack_test_find_id_mut"));
+    cars.find_id_mut(1).unwrap().update(|i| i.hp = 1).unwrap();
+    cars.find_id_mut(2).unwrap().update(|i| i.hp = 11).unwrap();
+    cars.find_id_mut(3).unwrap().update(|i| i.hp = 111).unwrap();
 
     drop(cars);
     let cars =
-        create_dummy_vecpack(PathBuf::from("data/vecpack_test_get_mut_by_id"));
+        create_dummy_vecpack(PathBuf::from("data/vecpack_test_find_id_mut"));
 
-    assert_eq!(cars.get_by_id(1).unwrap().hp, 1);
-    assert_eq!(cars.get_by_id(2).unwrap().hp, 11);
-    assert_eq!(cars.get_by_id(3).unwrap().hp, 111);
+    assert_eq!(cars.find_id(1).unwrap().hp, 1);
+    assert_eq!(cars.find_id(2).unwrap().hp, 11);
+    assert_eq!(cars.find_id(3).unwrap().hp, 111);
 }
