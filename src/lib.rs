@@ -347,8 +347,8 @@ where
     }
 }
 
-// impl<'a, T> VecPack<T> where T: Serialize + Sized + Clone
-
+// Deref implementation for VecPack<T>
+// It returns an unmutable reference to &Vec<Pack<T>>
 impl<T> Deref for VecPack<T>
 where
     T: Serialize + Sized + Clone,
@@ -359,15 +359,10 @@ where
     }
 }
 
-// impl<T> DerefMut for VecPack<T>
-// where
-//     T: Serialize + Sized + Clone,
-// {
-//     fn deref_mut(&mut self) -> &mut Self::Target {
-//         &mut self.data
-//     }
-// }
-
+// VecPack mutable iterator
+// It implements Iterator and we use it to
+// get a mutable iterator for VecPack<T>
+// It only holds &'a mut Vec<Pack<T>>.
 pub struct VecPackIterMut<'a, T>
 where
     T: Serialize + Sized + Clone + 'a,
@@ -375,6 +370,11 @@ where
     data: &'a mut [Pack<T>],
 }
 
+// Iterator implementation for VecPackIterMut<'a, T>
+// Many thank to Alice from Rust Forum
+//
+// See the thread here:
+// https://users.rust-lang.org/t/magic-lifetime-using-iterator-next/34729/5
 impl<'a, T> Iterator for VecPackIterMut<'a, T>
 where
     T: Serialize + Sized + Clone + 'a,
@@ -395,17 +395,17 @@ where
 // Implement IntoIter for VecPack<T>
 // TODO: Maybe too dangerous!
 // TODO: Remove this implementation?
-impl<T> IntoIterator for VecPack<T>
-where
-    T: Serialize + Sized + Clone,
-{
-    type Item = Pack<T>;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.into_iter()
-    }
-}
+// impl<T> IntoIterator for VecPack<T>
+// where
+//     T: Serialize + Sized + Clone,
+// {
+//     type Item = Pack<T>;
+//     type IntoIter = std::vec::IntoIter<Self::Item>;
+//
+//     fn into_iter(self) -> Self::IntoIter {
+//         self.data.into_iter()
+//     }
+// }
 
 // Implement IntoIter for &'a mut VecPack<T>
 impl<'a, T> IntoIterator for &'a mut VecPack<T>
@@ -422,10 +422,13 @@ where
     }
 }
 
-fn demo(a: &mut VecPack<u32>) {
-    let b = a
-        .into_iter()
-        .map(|i| (*i).clone() * 2)
-        .collect::<Vec<u32>>();
-    println!("{:?}", b);
-}
+// fn demo(a: &mut VecPack<u32>) {
+//     let b = &mut a
+//         .into_iter()
+//         .map(|i| {
+//             (*i.as_mut()) += 1;
+//             i.clone()
+//         })
+//         .collect::<Vec<u32>>();
+//     println!("{:?}", b);
+// }
