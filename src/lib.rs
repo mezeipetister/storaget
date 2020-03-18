@@ -167,16 +167,19 @@ where
 /// a special Vec<Pack<T>>.
 pub struct VecPack<T>
 where
-    T: Serialize + Sized + Clone,
+    T: VecPackMember<T> + fmt::Display,
 {
     data: Vec<Pack<T>>,
     path: PathBuf,
 }
 
-// TODO: Should we rename it?
-pub trait PackHasId<T>: Serialize {
-    type Result;
-    fn get_id(&self) -> &T;
+/// This trait defines the requirements
+/// to be a member of a VecPack<T>
+pub trait VecPackMember<I>: Serialize + Sized + Clone
+where
+    I: fmt::Display,
+{
+    fn get_id(&self) -> I;
 }
 
 /// Save DATA OBJECT to its path
@@ -338,12 +341,71 @@ where
     }
 }
 
-impl<'a, T> VecPack<T>
+impl<T> VecPack<T>
 where
-    T: Serialize + Sized + Clone,
+    for<'de> T: VecPackMember<T> + Deserialize<'de> + Default + fmt::Display,
 {
-    pub fn as_mut_vec(&'a mut self) -> &'a mut Vec<Pack<T>> {
-        &mut self.data
+    // TODO: Check FS operations. What if path is a file?
+    pub fn new(path: PathBuf) -> PackResult<VecPack<T>> {
+        if !path.exists() {
+            std::fs::create_dir_all(&path)?;
+        }
+        Ok(VecPack {
+            data: Vec::new(),
+            path,
+        })
+    }
+    pub fn load_or_init(path: PathBuf) -> PackResult<VecPack<T>> {
+        if !path.exists() {
+            std::fs::create_dir_all(&path)?;
+        }
+        let mut result: VecPack<T> = VecPack::new(path.clone())?;
+        std::fs::read_dir(path.clone())?
+            .filter_map(|file| {
+                file.ok().and_then(|e| {
+                    e.path().file_name().and_then(|n| {
+                        n.to_str().map(|s| {
+                            let mut p = path.clone();
+                            p.push(s);
+                            p
+                        })
+                    })
+                })
+            })
+            .collect::<Vec<PathBuf>>()
+            .iter()
+            .for_each(|path| {
+                result
+                    .insert_pack(
+                        Pack::<T>::load_from_path(path.clone()).expect(
+                            &format!(
+                                "Cannot deserialize file with ID: {}",
+                                (&path).to_str().unwrap()
+                            ),
+                        ),
+                    )
+                    .expect(&format!(
+                        "Error while adding file to VecPack with ID: {}",
+                        (&path).to_str().unwrap()
+                    ));
+            });
+        Ok(result)
+    }
+    pub fn insert(&mut self, item: T) -> PackResult<()> {
+        // TODO: Move file name creation to a central place!
+        let mut p = (&self.path).clone();
+        p.push(&format!("{}.yml", item.get_id()));
+        let p = Pack {
+            data: item,
+            path: p,
+        };
+        p.save()?;
+        self.data.push(p);
+        Ok(())
+    }
+    pub fn insert_pack(&mut self, item: Pack<T>) -> PackResult<()> {
+        self.data.push(item);
+        Ok(())
     }
 }
 
@@ -351,7 +413,7 @@ where
 // It returns an unmutable reference to &Vec<Pack<T>>
 impl<T> Deref for VecPack<T>
 where
-    T: Serialize + Sized + Clone,
+    T: VecPackMember<T> + fmt::Display,
 {
     type Target = Vec<Pack<T>>;
     fn deref(&self) -> &Self::Target {
@@ -410,7 +472,7 @@ where
 // Implement IntoIter for &'a mut VecPack<T>
 impl<'a, T> IntoIterator for &'a mut VecPack<T>
 where
-    T: Serialize + Sized + Clone,
+    T: VecPackMember<T> + fmt::Display,
 {
     type Item = &'a mut Pack<T>;
     type IntoIter = VecPackIterMut<'a, T>;
