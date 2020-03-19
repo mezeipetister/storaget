@@ -180,8 +180,8 @@ where
 /// This trait defines the requirements
 /// to be a member of a VecPack<T>
 pub trait VecPackMember: Serialize + Sized + Clone {
-    type Target: fmt::Display + std::cmp::PartialEq;
-    fn get_id(&self) -> Self::Target;
+    // type Target: fmt::Display + std::cmp::PartialEq;
+    fn get_id(&self) -> &str;
 }
 
 /// Save DATA OBJECT to its path
@@ -459,7 +459,7 @@ where
     }
     /// Find ID and returns &Pack<T>
     /// as an unmutable reference
-    pub fn find_id(&self, id: T::Target) -> PackResult<&Pack<T>> {
+    pub fn find_id(&self, id: &str) -> PackResult<&Pack<T>> {
         match self.iter().position(|i| i.get_id() == id) {
             Some(p) => Ok(&self.get(p).unwrap()),
             None => Err(PackError::ObjectNotFound),
@@ -467,7 +467,7 @@ where
     }
     /// Find ID and returns &mut Pack<T>
     /// as a mutable reference
-    pub fn find_id_mut(&mut self, id: T::Target) -> PackResult<&mut Pack<T>> {
+    pub fn find_id_mut(&mut self, id: &str) -> PackResult<&mut Pack<T>> {
         match &mut self.into_iter().position(|i| i.get_id() == id) {
             Some(p) => Ok(self.as_vec_mut().get_mut(*p).unwrap()),
             None => Err(PackError::ObjectNotFound),
@@ -476,7 +476,7 @@ where
     /// Check ID is available
     /// If ID is taken, returns false,
     /// otherwise returns true
-    pub fn check_id_available(&self, id: T::Target) -> bool {
+    pub fn check_id_available(&self, id: &str) -> bool {
         match self.iter().position(|i| i.get_id() == id) {
             Some(_) => false,
             None => true,
