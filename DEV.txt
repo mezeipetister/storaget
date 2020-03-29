@@ -281,3 +281,13 @@ Pack methods
 
 
 Storage<Vec<Pack<T>>>
+
+Schema Version Management (SVM)
+
+    We need an easy to use solution to manage schema updates and data migration
+    with ZERO ERROR.
+    
+    trait TryFrom {
+        type From: TryFrom;
+        fn try_from() -> PackResult<Self> {}
+    }

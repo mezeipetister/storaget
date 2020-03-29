@@ -156,3 +156,21 @@ fn test_id_str() {
 
     assert_eq!(robots.find_id("a").is_ok(), true);
 }
+
+#[test]
+fn test_mut_ref() {
+    let mut robots: VecPack<Robot> =
+        VecPack::load_or_init(PathBuf::from("data/vecpack_test_mut_red"))
+            .unwrap();
+    robots
+        .insert(Robot::new(
+            "firstone".to_string(),
+            "Mini Robot".to_string(),
+            true,
+        ))
+        .unwrap();
+
+    let robots = robots.as_vec_mut();
+    robots.get_mut(0).unwrap().as_mut().name = "Mini Roboto".to_string();
+    assert_eq!(robots.get(0).unwrap().name, "Mini Roboto");
+}

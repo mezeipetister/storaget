@@ -184,6 +184,14 @@ pub trait VecPackMember: Serialize + Sized + Clone {
     fn get_id(&self) -> &str;
 }
 
+pub trait TryFrom {
+    type TryFrom: for<'de> Deserialize<'de>
+        + Serialize
+        + Default
+        + Sized
+        + Clone;
+}
+
 /// Save DATA OBJECT to its path
 /// Moved this logic into this separated private function
 /// as we use it from the Drop implementation and from save method.
@@ -195,6 +203,52 @@ where
     buffer.write_all(serde_yaml::to_string(&data)?.as_bytes())?;
     buffer.flush()?;
     Ok(())
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct NOTHING;
+
+impl<'a, T> Pack<T>
+where
+    for<'de> T: Serialize
+        + Deserialize<'de>
+        + Default
+        + Sized
+        + Clone
+        + 'a
+        + TryFrom
+        + std::convert::From<<T as TryFrom>::TryFrom>,
+{
+    // TODO: Why this is not an infinite loop when T == TryFrom?
+    pub fn try_load_from_path(path: PathBuf) -> PackResult<Pack<T>> {
+        match Pack::<T>::load_from_path(path.clone()) {
+            Ok(pack_t) => Ok(pack_t),
+            Err(_) => {
+                let data = Pack::<T::TryFrom>::load_from_path(path.clone())?
+                    .into_inner()
+                    .into();
+                let pack: Pack<T> = Pack {
+                    data: data,
+                    path: path,
+                };
+                pack.save()?;
+                Ok(pack)
+            }
+        }
+    }
+    pub fn try_load_or_init(
+        mut path: PathBuf,
+        file_id: &str,
+    ) -> PackResult<Pack<T>> {
+        if !path.exists() {
+            std::fs::create_dir_all(&path)?;
+        }
+        path.push(&format!("{}.yml", file_id));
+        if !path.exists() {
+            Pack::<T>::new(path.clone())?.save()?;
+        }
+        Pack::try_load_from_path(path)
+    }
 }
 
 impl<'a, T> Pack<T>
@@ -209,6 +263,12 @@ where
             path,
         })
     }
+    pub fn from_str(buffer: &str, path: PathBuf) -> PackResult<Pack<T>> {
+        match serde_yaml::from_str::<T>(&buffer) {
+            Ok(t) => Ok(Pack { data: t, path }),
+            Err(err) => Err(PackError::DeserializeError(err.to_string())),
+        }
+    }
     /// Load Pack<T> from Path
     /// If Path is file and exists, then it tries to load
     /// then deserialize. Otherwise returns PackError.
@@ -216,10 +276,7 @@ where
         let mut file = File::open(&path)?;
         let mut buffer = String::new();
         file.read_to_string(&mut buffer)?;
-        match serde_yaml::from_str::<T>(&buffer) {
-            Ok(t) => Ok(Pack { data: t, path }),
-            Err(err) => Err(PackError::DeserializeError(err.to_string())),
-        }
+        Self::from_str(&buffer, path)
     }
     /// Load or init Pack<T> from Path
     /// If Path does not exist, then it tries to create;
@@ -295,6 +352,9 @@ where
             path: &self.path,
         }
     }
+    pub fn into_inner(self) -> T {
+        self.data
+    }
 }
 
 impl<T> Deref for Pack<T>
@@ -340,6 +400,85 @@ where
         //  - Panic(),
         //  - & | error log
         let _ = save_data_object(&self.path, &self.data);
+    }
+}
+
+// impl<T> VecPack<T>
+// where
+//     for<'de> T: VecPackMember + Deserialize<'de> + Default + PackTryFrom,
+// {
+//     pub fn try_load_or_init(path: PathBuf) -> PackResult<VecPack<T>> {
+//         match Self::load_or_init(path) {
+//             Ok(res) => Ok(res),
+//             Err(err) => Self::try_from().into(),
+//         }
+//     }
+// }
+
+impl<T> VecPack<T>
+where
+    for<'de> T: VecPackMember
+        + Serialize
+        + Deserialize<'de>
+        + Default
+        + Sized
+        + Clone
+        + TryFrom
+        + std::convert::From<<T as TryFrom>::TryFrom>,
+{
+    pub fn try_load_or_init(path: PathBuf) -> PackResult<VecPack<T>> {
+        // If path is a file
+        // then panic!
+        if path.is_file() {
+            panic!(
+                "Given VecPack path is not a dir. Path: {}",
+                &path.to_str().unwrap()
+            );
+        }
+        // If path does not exist,
+        // then we create it.
+        if !path.exists() {
+            std::fs::create_dir_all(&path)?;
+        }
+        // Result empty VecPack<T>
+        let mut result: VecPack<T> = VecPack::new(path.clone())?;
+        // First collect all
+        // the file names from path
+        std::fs::read_dir(path.clone())?
+            .filter_map(|file| {
+                file.ok().and_then(|e| {
+                    e.path().file_name().and_then(|n| {
+                        n.to_str().map(|s| {
+                            let mut p = path.clone();
+                            p.push(s);
+                            p
+                        })
+                    })
+                })
+            })
+            .collect::<Vec<PathBuf>>()
+            // Then iter over path vector
+            // and try to read and deserialize
+            // them.
+            .iter()
+            .for_each(|path| {
+                // Add deserialized T to VecPack<T>
+                result
+                    .insert_pack(
+                        // Create Pack<T> from T
+                        Pack::<T>::try_load_from_path(path.clone()).expect(
+                            &format!(
+                                "Cannot deserialize file with ID: {}",
+                                (&path).to_str().unwrap()
+                            ),
+                        ),
+                    )
+                    .expect(&format!(
+                        "Error while adding file to VecPack with ID: {}",
+                        (&path).to_str().unwrap()
+                    ));
+            });
+        Ok(result)
     }
 }
 
@@ -448,6 +587,14 @@ where
         self.data.push(p);
         Ok(())
     }
+    // pub fn remove_by_id(&mut self, id: &str) -> PackResult<()> {
+    //     match self.iter().position(|i| i.get_id() == id) {
+    //         Some(p) => {
+    //             std::fs::remove_file(&self.find_id)?
+    //         }
+    //         None => Err(PackError::ObjectNotFound),
+    //     }
+    // }
     /// Insert Pack<T> to VecPack<T>
     /// Only if ID is not taken
     pub fn insert_pack(&mut self, item: Pack<T>) -> PackResult<()> {
