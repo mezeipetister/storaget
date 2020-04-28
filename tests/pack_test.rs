@@ -34,6 +34,27 @@ fn test_as_mut() {
     assert_eq!(*(meaning_of_life), 42);
 }
 
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct Car {
+    fuel: String,
+    number_of_seats: u32,
+}
+
+#[test]
+fn test_as_ref() {
+    let mut meaning_of_life: Pack<Car> = Pack::load_or_init(
+        PathBuf::from("data/pack_test"),
+        "meaning_of_life_as_ref",
+    )
+    .unwrap();
+    meaning_of_life.as_mut().unpack().number_of_seats = 4;
+    assert_eq!(get_seats(&meaning_of_life), 4);
+}
+
+fn get_seats(car: &Pack<Car>) -> u32 {
+    car.unpack().number_of_seats
+}
+
 #[test]
 fn test_as_deref() {
     let mut meaning_of_life: Pack<i32> = Pack::load_or_init(

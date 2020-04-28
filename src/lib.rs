@@ -355,6 +355,9 @@ where
     pub fn into_inner(self) -> T {
         self.data
     }
+    pub fn unpack(&self) -> &T {
+        &self.data
+    }
 }
 
 impl<T> Deref for Pack<T>
@@ -718,6 +721,15 @@ where
         VecPackIterMut {
             data: &mut self.data,
         }
+    }
+}
+
+impl<'a, T> PackGuard<'a, T>
+where
+    for<'de> T: Serialize + Deserialize<'de> + Default + Sized + Clone + 'a,
+{
+    pub fn unpack(&mut self) -> &mut T {
+        &mut self.data
     }
 }
 

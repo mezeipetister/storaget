@@ -97,9 +97,9 @@ fn test_vecpack_as_mut() {
 fn test_vecpack_find_id() {
     let cars = create_dummy_vecpack(PathBuf::from("data/vecpack_test_find_id"));
     assert_eq!(cars.find_id("3").is_ok(), true);
-    assert_eq!(cars.find_id("1").unwrap().hp, 150);
-    assert_eq!(cars.find_id("2").unwrap().hp, 650);
-    assert_eq!(cars.find_id("3").unwrap().hp, 250);
+    assert_eq!(cars.find_id("1").unwrap().unpack().hp, 150);
+    assert_eq!(cars.find_id("2").unwrap().unpack().hp, 650);
+    assert_eq!(cars.find_id("3").unwrap().unpack().hp, 250);
 }
 
 #[test]
