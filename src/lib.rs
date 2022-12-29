@@ -141,7 +141,7 @@ impl From<io::Error> for PackError {
 /// Pack<T>
 /// Small FS layer around type T
 /// Pack is responsible to sync T to the filesystem.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Pack<T>
 where
     T: Serialize + Sized + Clone,
